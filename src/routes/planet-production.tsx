@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
 import { formatNumber } from "@/lib/formats";
 import { calculateProduction, type ProductionPlan } from "@/planner/production";
+import { prosperousProvider } from "@/provider/fio-provider";
+import type { PlanetResource } from "@/provider/types";
 import { newId } from "@/schema/defaults";
 import type { Planet, Scenario } from "@/schema/types";
 import { useAppStore } from "@/store/app-store";
@@ -15,7 +17,102 @@ import { useAppStore } from "@/store/app-store";
  * they are all views of the same planet and are read together.
  */
 
-type Section = "production" | "balance" | "buy";
+type Section = "production" | "balance" | "buy" | "resources";
+
+/** What the planet itself yields, straight from FIO. */
+function ResourcesSection({ planetCode }: { planetCode: string | null }) {
+  const [resources, setResources] = useState<PlanetResource[] | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "missing">("idle");
+
+  useEffect(() => {
+    if (!planetCode) {
+      setResources(null);
+      setStatus("idle");
+      return;
+    }
+
+    let cancelled = false;
+    setStatus("loading");
+
+    prosperousProvider
+      .getPlanetByIdOrCode(planetCode)
+      .then((planet) => {
+        if (cancelled) return;
+        if (!planet) {
+          setResources(null);
+          setStatus("missing");
+          return;
+        }
+        setResources(planet.resources);
+        setStatus("idle");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("missing");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planetCode]);
+
+  if (!planetCode) {
+    return <EmptyState title="No FIO id set">Set the planet's FIO id above to look up what it yields.</EmptyState>;
+  }
+  if (status === "loading") return <div className="px-4 py-6 text-sm text-slate-500">Looking up {planetCode}…</div>;
+  if (status === "missing") {
+    return (
+      <EmptyState title={`Could not find “${planetCode}”`}>
+        Check the FIO id — it should be a natural id like OT-580b or an exact planet name.
+      </EmptyState>
+    );
+  }
+  if (!resources?.length) {
+    return <EmptyState title="No extractable resources">FIO lists nothing minable or harvestable here.</EmptyState>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-b border-edge text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-4 py-2 text-left font-medium">Resource</th>
+            <th className="px-4 py-2 text-left font-medium">Type</th>
+            <th className="px-4 py-2 text-right font-medium">Concentration</th>
+            <th className="px-4 py-2 text-left font-medium">Extracted by</th>
+          </tr>
+        </thead>
+        <tbody>
+          {resources.map((resource) => (
+            <tr key={resource.materialId} className="border-b border-edge/40 last:border-0">
+              <td className="px-4 py-2">
+                <span className="font-medium text-slate-100">{resource.ticker ?? "?"}</span>
+                {resource.name && <span className="ml-2 text-xs text-slate-500">{resource.name}</span>}
+              </td>
+              <td className="px-4 py-2 text-xs text-slate-400">{resource.resourceType ?? "—"}</td>
+              <td className="px-4 py-2 text-right">
+                {resource.factor === null ? "—" : `${formatNumber(resource.factor * 100, 2)}%`}
+              </td>
+              <td className="px-4 py-2 text-xs text-slate-400">{extractorFor(resource.resourceType)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function extractorFor(resourceType: string | null): string {
+  switch ((resourceType ?? "").toUpperCase()) {
+    case "MINERAL":
+      return "EXT — Extractor";
+    case "LIQUID":
+      return "RIG — Rig";
+    case "GASEOUS":
+      return "COL — Collector";
+    default:
+      return "—";
+  }
+}
 
 export function PlanetProduction({ planet, scenario }: { planet: Planet; scenario: Scenario }) {
   const { update } = useAppStore();
@@ -52,6 +149,7 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
         {(
           [
             ["production", "Production"],
+            ["resources", "Natural resources"],
             ["balance", "Resource balance"],
             ["buy", `To buy${plan.needToBuy.length ? ` (${plan.needToBuy.length})` : ""}`],
           ] as const
@@ -79,6 +177,9 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
       )}
 
       {section === "production" && <ProductionSection planet={planet} plan={plan} edit={edit} />}
+      {section === "resources" && (
+        <ResourcesSection planetCode={planet.fioPlanetNaturalId ?? planet.name ?? null} />
+      )}
       {section === "balance" && <BalanceSection plan={plan} />}
       {section === "buy" && <BuySection planet={planet} plan={plan} edit={edit} />}
     </div>

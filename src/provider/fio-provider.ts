@@ -18,6 +18,8 @@ import type {
   PopulationClass,
   ProsperousProvider,
   RecipeCandidate,
+  SystemInfo,
+  SystemPlanet,
   WorkforceNeed,
 } from "@/provider/types";
 
@@ -73,6 +75,8 @@ export class FioProvider implements ProsperousProvider {
   private readonly buildingCache = new Map<string, Promise<BuildingInfo | null>>();
   private readonly recipeCache = new Map<string, Promise<RecipeCandidate[]>>();
   private readonly planetCache = new Map<string, Promise<PlanetInfo | null>>();
+  private planetIndexCache: Promise<Array<{ naturalId: string; name: string }>> | null = null;
+  private systemsCache: Promise<SystemInfo[]> | null = null;
 
   constructor(baseUrl = import.meta.env.VITE_FIO_REST_BASE_URL ?? DEFAULT_BASE_URL) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -242,6 +246,65 @@ export class FioProvider implements ProsperousProvider {
     return (await this.getBuildingByCode(buildingCode))?.areaCost ?? null;
   }
 
+  /**
+   * Finds a system by natural id (OT-580) or name (Moria).
+   */
+  async getSystem(query: string): Promise<SystemInfo | null> {
+    const normalized = query.trim().toUpperCase();
+    if (!normalized) return null;
+
+    if (!this.systemsCache) {
+      this.systemsCache = this.fetchJson("/systemstars")
+        .then((json) =>
+          asArray(json)
+            .map((entry) => {
+              const record = asRecord(entry);
+              const naturalId = asString(pickField(record ?? {}, ["NaturalId", "SystemNaturalId"]));
+              if (!naturalId) return null;
+              return {
+                systemId: asString(pickField(record ?? {}, ["SystemId"])),
+                naturalId,
+                name: asString(pickField(record ?? {}, ["Name"])) ?? naturalId,
+              };
+            })
+            .filter((entry): entry is SystemInfo => Boolean(entry)),
+        )
+        .catch(() => []);
+    }
+
+    const systems = await this.systemsCache;
+    return (
+      systems.find(
+        (system) => system.naturalId.toUpperCase() === normalized || system.name.toUpperCase() === normalized,
+      ) ?? null
+    );
+  }
+
+  /**
+   * Every planet in a system.
+   *
+   * A planet's natural id is its system's natural id plus a letter — OT-580b is
+   * the second planet of OT-580 — so the system's planets are the entries with
+   * that prefix. FIO has no endpoint that lists them directly, and the one
+   * response that carries system ids is 35MB.
+   */
+  async getSystemPlanets(query: string): Promise<{ system: SystemInfo; planets: SystemPlanet[] } | null> {
+    const system = await this.getSystem(query);
+    if (!system) return null;
+
+    const prefix = system.naturalId.toUpperCase();
+    const planets = (await this.getPlanetIndex())
+      .filter((planet) => {
+        const id = planet.naturalId.toUpperCase();
+        // Guard against OT-58 matching OT-580b: the remainder must be the
+        // planet's letter, not more of a longer system id.
+        return id.startsWith(prefix) && /^[A-Z]+$/.test(id.slice(prefix.length)) && id.length > prefix.length;
+      })
+      .sort((a, b) => a.naturalId.localeCompare(b.naturalId));
+
+    return { system, planets };
+  }
+
   private async fetchPlanet(query: string) {
     const materials = await this.getAllMaterials();
     const materialById = new Map(materials.map((material) => [material.id, material]));
@@ -250,19 +313,38 @@ export class FioProvider implements ProsperousProvider {
       .catch(() => null);
     if (direct) return direct;
 
+    // The direct lookup already accepts a natural id or a name, so reaching
+    // here usually means a typo. Resolve against the index of every planet —
+    // 240kB of ids and names — rather than /planet/allplanets/full, which is
+    // 35MB and far too heavy to pull into a browser just to check a spelling.
     const normalized = query.toUpperCase();
-    const json = await this.fetchJson("/planet/allplanets/full").catch(() => []);
-    return (
-      asArray(json)
-        .map((entry) => this.normalizePlanet(entry, materialById))
-        .filter((entry): entry is PlanetInfo => Boolean(entry))
-        .find(
-          (planet) =>
-            planet.id?.toUpperCase() === normalized ||
-            planet.naturalId.toUpperCase() === normalized ||
-            planet.name.toUpperCase() === normalized,
-        ) ?? null
+    const match = (await this.getPlanetIndex()).find(
+      (planet) => planet.naturalId.toUpperCase() === normalized || planet.name.toUpperCase() === normalized,
     );
+    if (!match) return null;
+
+    return this.fetchJson(`/planet/${encodeURIComponent(match.naturalId)}`)
+      .then((json) => this.normalizePlanet(json, materialById))
+      .catch(() => null);
+  }
+
+  /** Every planet's natural id and name. Enough to resolve or list, nothing more. */
+  private async getPlanetIndex(): Promise<Array<{ naturalId: string; name: string }>> {
+    if (!this.planetIndexCache) {
+      this.planetIndexCache = this.fetchJson("/planet/allplanets")
+        .then((json) =>
+          asArray(json)
+            .map((entry) => {
+              const record = asRecord(entry);
+              const naturalId = asString(pickField(record ?? {}, ["PlanetNaturalId", "NaturalId"]));
+              if (!naturalId) return null;
+              return { naturalId, name: asString(pickField(record ?? {}, ["PlanetName", "Name"])) ?? naturalId };
+            })
+            .filter((entry): entry is { naturalId: string; name: string } => Boolean(entry)),
+        )
+        .catch(() => []);
+    }
+    return this.planetIndexCache;
   }
 
   private async fetchJson(path: string) {

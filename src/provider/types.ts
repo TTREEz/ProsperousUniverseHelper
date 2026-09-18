@@ -55,6 +55,18 @@ export type PlanetInfo = {
   hasLocalMarket: boolean | null;
 };
 
+export type SystemInfo = {
+  systemId: string | null;
+  /** e.g. "OT-580". A planet's natural id is this plus a letter. */
+  naturalId: string;
+  name: string;
+};
+
+export type SystemPlanet = {
+  naturalId: string;
+  name: string;
+};
+
 export type BuildingInfo = {
   code: string;
   name: string;

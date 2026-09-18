@@ -73,6 +73,17 @@ per building, and they dominate the real cost: a 490-area base on a rocky planet
 needs 1,960 MCG on top of a few hundred units of everything else. A shopping
 list with no target planet set leaves them out and says so.
 
+### Looking things up
+
+A planet's Natural resources section shows what it yields, with FIO's material
+ids resolved to tickers and each type mapped to the building that extracts it.
+
+Systems can be looked up by name or natural id to add their planets in one go.
+FIO has no endpoint listing a system's planets, and the one response carrying
+system ids is 35MB, so this uses the fact that a planet's natural id is its
+system's plus a letter: `OT-580b` is the second planet of `OT-580`. The match
+requires the remainder to be letters only, so `OT-58` cannot claim `OT-580b`.
+
 ### Per-planet production
 
 A planet's Production, Resource balance and To buy sections live on the planet

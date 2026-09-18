@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
+import { prosperousProvider } from "@/provider/fio-provider";
+import type { SystemInfo, SystemPlanet } from "@/provider/types";
 import { PlanetProduction } from "@/routes/planet-production";
 import { createPlanet, newId } from "@/schema/defaults";
 import type { Planet } from "@/schema/types";
@@ -104,6 +106,8 @@ export function PlanetsRoute() {
           </Button>
         </div>
 
+        <SystemImport scenarioId={scenarioId} />
+
         {scenario.systems.length === 0 ? (
           <EmptyState title="No systems yet">
             Without systems every route is left unlabelled, because two unassigned planets could be anywhere.
@@ -200,6 +204,135 @@ export function PlanetsRoute() {
           scenarioId={scenarioId}
           onDelete={() => removePlanet(selected.id)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Looks a system up on FIO and adds its planets in one go, rather than typing
+ * each one and hoping the spelling matches.
+ */
+function SystemImport({ scenarioId }: { scenarioId: string }) {
+  const { file, update } = useAppStore();
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<{ system: SystemInfo; planets: SystemPlanet[] } | null>(null);
+  const [status, setStatus] = useState<"idle" | "searching" | "missing">("idle");
+
+  const scenario = file?.scenarios.find((entry) => entry.id === scenarioId) ?? null;
+  const existingCodes = new Set(
+    (scenario?.planets ?? []).map((planet) => (planet.fioPlanetNaturalId ?? planet.name).toUpperCase()),
+  );
+
+  async function search() {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setStatus("searching");
+    setFound(null);
+    try {
+      const result = await prosperousProvider.getSystemPlanets(trimmed);
+      if (!result) {
+        setStatus("missing");
+        return;
+      }
+      setFound(result);
+      setStatus("idle");
+    } catch {
+      setStatus("missing");
+    }
+  }
+
+  function addAll(planets: SystemPlanet[]) {
+    if (!found) return;
+    update((draft) => {
+      const target = draft.scenarios.find((entry) => entry.id === scenarioId);
+      if (!target) return;
+
+      let system = target.systems.find(
+        (entry) => entry.fioSystemNaturalId?.toUpperCase() === found.system.naturalId.toUpperCase(),
+      );
+      if (!system) {
+        system = {
+          id: newId(),
+          name: found.system.name,
+          fioSystemNaturalId: found.system.naturalId,
+          notes: null,
+        };
+        target.systems.push(system);
+      }
+
+      for (const entry of planets) {
+        const planet = createPlanet(entry.name);
+        planet.fioPlanetNaturalId = entry.naturalId;
+        planet.systemId = system.id;
+        target.planets.push(planet);
+      }
+    });
+  }
+
+  const newPlanets = (found?.planets ?? []).filter(
+    (planet) => !existingCodes.has(planet.naturalId.toUpperCase()) && !existingCodes.has(planet.name.toUpperCase()),
+  );
+
+  return (
+    <div className="border-b border-edge px-4 py-3">
+      <div className="flex gap-2">
+        <Input
+          value={query}
+          placeholder="Look up a system to add its planets, e.g. Moria or OT-580"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => event.key === "Enter" && void search()}
+        />
+        <Button onClick={() => void search()} disabled={!query.trim() || status === "searching"}>
+          <Search className="h-3.5 w-3.5" /> {status === "searching" ? "Looking…" : "Look up"}
+        </Button>
+      </div>
+
+      {status === "missing" && (
+        <p className="mt-2 text-xs text-amber-300">
+          No system called “{query}”. Try its natural id, like OT-580.
+        </p>
+      )}
+
+      {found && (
+        <div className="mt-3">
+          <div className="mb-2 flex items-center gap-2 text-sm">
+            <span className="font-medium text-slate-100">{found.system.name}</span>
+            <Badge>{found.system.naturalId}</Badge>
+            <span className="text-xs text-slate-500">
+              {found.planets.length} {found.planets.length === 1 ? "planet" : "planets"}
+            </span>
+            {newPlanets.length > 0 && (
+              <Button size="sm" variant="primary" className="ml-auto" onClick={() => addAll(newPlanets)}>
+                <Plus className="h-3.5 w-3.5" /> Add {newPlanets.length} missing
+              </Button>
+            )}
+          </div>
+
+          <ul className="flex flex-wrap gap-1.5">
+            {found.planets.map((planet) => {
+              const already =
+                existingCodes.has(planet.naturalId.toUpperCase()) || existingCodes.has(planet.name.toUpperCase());
+              return (
+                <li key={planet.naturalId}>
+                  <button
+                    disabled={already}
+                    onClick={() => addAll([planet])}
+                    title={already ? "Already in this scenario" : `Add ${planet.name}`}
+                    className={
+                      already
+                        ? "cursor-default rounded border border-edge px-2 py-1 text-xs text-slate-600"
+                        : "rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-accent hover:text-accent"
+                    }
+                  >
+                    {planet.name}
+                    <span className="ml-1.5 opacity-60">{planet.naturalId}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </div>
   );
