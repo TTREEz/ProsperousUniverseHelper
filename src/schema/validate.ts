@@ -20,9 +20,9 @@ const batchInfo = z.object({
 
 const factory = z.object({
   id: z.string(),
-  name: z.string(),
-  efficiency: z.number(),
-  slots: z.number(),
+  buildingCode: z.string(),
+  count: z.number().default(1),
+  efficiency: z.number().default(1),
   notes: nullableString,
 });
 
@@ -118,6 +118,7 @@ const expansionPackage = z.object({
   targetPlanetId: z.string().nullable().default(null),
   exchangeCode: z.string().nullable().default(null),
   enabled: z.boolean().default(true),
+  deductExistingBuildings: z.boolean().default(false),
   items: z
     .array(
       z.object({

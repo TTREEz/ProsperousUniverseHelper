@@ -34,6 +34,8 @@ export type ShoppingRow = {
 export type MaterialPlan = {
   rows: ShoppingRow[];
   warnings: string[];
+  /** Populated when existing buildings were deducted, so the UI can show why. */
+  deductions: BuildingDeduction[];
   totals: {
     distinctMaterials: number;
     unitsToBuy: number;
@@ -48,6 +50,20 @@ export type PackageInput = {
   checklist: ExpansionChecklistItem[];
   /** FIO natural id or name. Drives the environmental construction costs. */
   targetPlanetCode: string | null;
+  /**
+   * What already stands on the target planet, by building code. Only applied
+   * when `deductExisting` is set, because otherwise a hand-written list saying
+   * "buy 5 FRM" would quietly shrink.
+   */
+  existingBuildings?: Array<{ buildingCode: string; count: number }>;
+  deductExisting?: boolean;
+};
+
+export type BuildingDeduction = {
+  buildingCode: string;
+  requested: number;
+  alreadyBuilt: number;
+  stillToBuild: number;
 };
 
 /**
@@ -150,6 +166,17 @@ export async function derivePackagePlan(input: PackageInput, provider: Prosperou
     draft.sourceKinds.add(kind);
   };
 
+  // Remaining stock of each already-built building, consumed as items are read
+  // so two entries for the same code cannot both claim the same buildings.
+  const availableExisting = new Map<string, number>();
+  if (input.deductExisting) {
+    for (const existing of input.existingBuildings ?? []) {
+      const key = existing.buildingCode.trim().toUpperCase();
+      availableExisting.set(key, (availableExisting.get(key) ?? 0) + existing.count);
+    }
+  }
+  const deductions: BuildingDeduction[] = [];
+
   for (const item of input.items) {
     const code = item.itemCode.trim().toUpperCase();
     if (!code || item.quantity <= 0) continue;
@@ -158,6 +185,21 @@ export async function derivePackagePlan(input: PackageInput, provider: Prosperou
       await add(code, item.quantity, `${formatQty(item.quantity)} × ${code} (direct)`, "Direct material");
       continue;
     }
+
+    let quantityToBuild = item.quantity;
+    const alreadyBuilt = availableExisting.get(code) ?? 0;
+    if (alreadyBuilt > 0) {
+      const used = Math.min(alreadyBuilt, quantityToBuild);
+      availableExisting.set(code, alreadyBuilt - used);
+      quantityToBuild -= used;
+      deductions.push({
+        buildingCode: code,
+        requested: item.quantity,
+        alreadyBuilt: used,
+        stillToBuild: quantityToBuild,
+      });
+    }
+    if (quantityToBuild <= 0) continue;
 
     const building = await provider.getBuildingByCode(code).catch(() => null);
     if (!building) {
@@ -172,8 +214,8 @@ export async function derivePackagePlan(input: PackageInput, provider: Prosperou
       for (const line of bom) {
         await add(
           line.materialTicker,
-          line.quantity * item.quantity,
-          `${item.quantity} × ${code} build cost`,
+          line.quantity * quantityToBuild,
+          `${quantityToBuild} × ${code} build cost`,
           "Building BOM",
         );
       }
@@ -182,8 +224,8 @@ export async function derivePackagePlan(input: PackageInput, provider: Prosperou
     for (const line of environmentalLines(building.areaCost, planet)) {
       await add(
         line.ticker,
-        line.quantityPerBuilding * item.quantity,
-        `${item.quantity} × ${code} (${line.label})`,
+        line.quantityPerBuilding * quantityToBuild,
+        `${quantityToBuild} × ${code} (${line.label})`,
         "Environmental",
       );
     }
@@ -232,6 +274,7 @@ export async function derivePackagePlan(input: PackageInput, provider: Prosperou
   return {
     rows,
     warnings,
+    deductions,
     totals: {
       distinctMaterials: rows.length,
       unitsToBuy: rows.reduce((sum, row) => sum + row.remainingToBuy, 0),

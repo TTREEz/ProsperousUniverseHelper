@@ -134,6 +134,9 @@ export function OptimizerRoute() {
           )?.id ?? null,
         exchangeCode: null,
         enabled: true,
+        // The optimizer describes the finished base, so what to buy is this
+        // minus whatever already stands on the target planet.
+        deductExistingBuildings: true,
         items: buildings.map((row, index) => ({
           id: newId(),
           itemType: "BUILDING" as const,

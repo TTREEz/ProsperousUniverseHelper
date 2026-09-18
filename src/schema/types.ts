@@ -15,7 +15,7 @@
  */
 
 export const FILE_FORMAT = "pu-toolset-data" as const;
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 export type IsoDate = string;
 
@@ -107,11 +107,20 @@ export type BatchInfo = {
   notes: string | null;
 };
 
+/**
+ * A building that physically exists on the planet.
+ *
+ * Keyed by FIO building code rather than a free-typed name, because this is
+ * what lets a shopping list subtract what you have already built from what a
+ * plan says you need. Slot count and area come from the provider, so they are
+ * not stored here.
+ */
 export type Factory = {
   id: string;
-  name: string;
+  buildingCode: string;
+  count: number;
+  /** Running efficiency as a fraction, e.g. 1.12 for 112%. */
   efficiency: number;
-  slots: number;
   notes: string | null;
 };
 
@@ -189,6 +198,15 @@ export type ExpansionPackage = {
   targetPlanetId: string | null;
   exchangeCode: string | null;
   enabled: boolean;
+  /**
+   * Whether building quantities are a total to reach or an amount to add.
+   *
+   * A layout from the optimizer describes the finished base, so what to buy is
+   * that minus what already stands on the target planet. A hand-written list is
+   * usually "buy me this much" and must not be silently reduced, so this stays
+   * off unless the list came from the optimizer or the user turns it on.
+   */
+  deductExistingBuildings: boolean;
   items: ExpansionPackageItem[];
   adjustments: ExpansionPackageAdjustment[];
   checklist: ExpansionChecklistItem[];

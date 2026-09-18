@@ -10,7 +10,7 @@ function fileWithContent(): PuDataFile {
   const planet = createPlanet("Montem");
   const factoryId = newId();
 
-  planet.factories.push({ id: factoryId, name: "FP", efficiency: 1.12, slots: 5, notes: null });
+  planet.factories.push({ id: factoryId, buildingCode: "FP", count: 5, efficiency: 1.12, notes: null });
   planet.produced.push({ id: newId(), name: "RAT", amount: 140, allocatedSlots: 5, factoryId, notes: null });
   scenario.planets.push(planet);
 
@@ -69,6 +69,52 @@ describe("save file round trip", () => {
     expect(result.data.scenarios[0].expansionPackages).toEqual([]);
   });
 
+  it("upgrades a v1 file's factories to building codes and counts", () => {
+    const v1 = {
+      fileFormat: "pu-toolset-data",
+      schemaVersion: 1,
+      meta: { name: "Old", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", appVersion: "0.1.0" },
+      settings: { activeScenarioId: null, defaultExchangeCode: null },
+      scenarios: [
+        {
+          id: "s1",
+          name: "Live",
+          kind: "LIVE",
+          description: null,
+          createdFromScenarioId: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          systems: [],
+          planets: [
+            {
+              id: "p1",
+              name: "Montem",
+              factories: [{ id: "f1", name: "frm", efficiency: 1.1, slots: 4, notes: null }],
+            },
+          ],
+          tradeRoutes: [],
+          expansionPackages: [{ id: "e1", name: "List", items: [], adjustments: [], checklist: [] }],
+          baseTemplates: [],
+        },
+      ],
+    };
+
+    const result = loadAndMigrate(v1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.migratedFrom).toBe(1);
+    expect(result.data.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(result.data.scenarios[0].planets[0].factories[0]).toEqual({
+      id: "f1",
+      buildingCode: "FRM",
+      count: 4,
+      efficiency: 1.1,
+      notes: null,
+    });
+    expect(result.data.scenarios[0].expansionPackages[0].deductExistingBuildings).toBe(false);
+  });
+
   it("rejects a file from a newer app version rather than mangling it", () => {
     const file = JSON.parse(serialize(createEmptyFile())) as Record<string, unknown>;
     file.schemaVersion = SCHEMA_VERSION + 5;
@@ -89,11 +135,11 @@ describe("save file round trip", () => {
     const scenarios = file.scenarios as Array<Record<string, unknown>>;
     const planets = scenarios[0].planets as Array<Record<string, unknown>>;
     const factories = planets[0].factories as Array<Record<string, unknown>>;
-    factories[0].slots = "five";
+    factories[0].count = "five";
 
     const result = loadAndMigrate(file);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toContain("slots");
+    expect(result.error).toContain("count");
   });
 });

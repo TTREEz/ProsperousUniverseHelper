@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Boxes, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket, ShoppingCart } from "lucide-react";
+import { Boxes, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket, ShoppingCart, Truck } from "lucide-react";
 import { Badge, Button, cn } from "@/components/ui";
 import { activeScenario, useAppStore } from "@/store/app-store";
 import { storageDescription } from "@/storage";
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/optimizer", label: "Base Optimizer", icon: Rocket, end: false },
   { to: "/materials", label: "Material Planner", icon: ShoppingCart, end: false },
   { to: "/planets", label: "Planets", icon: Boxes, end: false },
+  { to: "/trade-routes", label: "Trade Routes", icon: Truck, end: false },
   { to: "/scenarios", label: "Scenarios", icon: Layers, end: false },
 ];
 

@@ -31,6 +31,9 @@ export function MaterialsRoute() {
       targetPlanetId: null,
       exchangeCode: null,
       enabled: true,
+      // A hand-written list means "buy me this much", so it is not reduced by
+      // what is already standing unless the user asks for that.
+      deductExistingBuildings: false,
       items: [],
       adjustments: [],
       checklist: [],
@@ -131,6 +134,11 @@ function PackageDetail({
 
   // Re-derive whenever the inputs that affect the answer change. The provider
   // is cached, so repeat runs after the first are cheap.
+  const existingBuildings = useMemo(
+    () => (targetPlanet?.factories ?? []).map((factory) => ({ buildingCode: factory.buildingCode, count: factory.count })),
+    [targetPlanet],
+  );
+
   const signature = useMemo(
     () =>
       JSON.stringify([
@@ -138,8 +146,10 @@ function PackageDetail({
         pkg.adjustments.map((adjustment) => [adjustment.materialTicker, adjustment.quantityDelta]),
         pkg.checklist.map((entry) => [entry.materialTicker, entry.acquiredQuantity, entry.checkedComplete]),
         targetPlanetCode,
+        pkg.deductExistingBuildings,
+        existingBuildings,
       ]),
-    [pkg.items, pkg.adjustments, pkg.checklist, targetPlanetCode],
+    [pkg.items, pkg.adjustments, pkg.checklist, targetPlanetCode, pkg.deductExistingBuildings, existingBuildings],
   );
 
   useEffect(() => {
@@ -153,6 +163,8 @@ function PackageDetail({
         adjustments: pkg.adjustments,
         checklist: pkg.checklist,
         targetPlanetCode,
+        existingBuildings,
+        deductExisting: pkg.deductExistingBuildings,
       },
       prosperousProvider,
     )
@@ -276,6 +288,30 @@ function PackageDetail({
           </Field>
         </div>
 
+        <label className="flex items-start gap-2 border-b border-edge px-4 py-3 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={pkg.deductExistingBuildings}
+            onChange={(event) =>
+              editPackage((target) => {
+                target.deductExistingBuildings = event.target.checked;
+              })
+            }
+          />
+          <span>
+            Building counts are a total to reach
+            <span className="mt-0.5 block text-xs text-slate-500">
+              {pkg.deductExistingBuildings
+                ? "Buildings already on the target planet are subtracted, so this lists only what is left to build."
+                : "Quantities are taken as extra buildings to add, ignoring what is already on the planet."}
+              {existingBuildings.length === 0 && targetPlanet
+                ? ` ${targetPlanet.name} has no buildings recorded yet — add them under Planets.`
+                : ""}
+            </span>
+          </span>
+        </label>
+
         {pkg.items.length === 0 ? (
           <EmptyState title="Nothing in this list yet">
             Add the buildings you plan to construct, or materials you need directly.
@@ -344,6 +380,20 @@ function PackageDetail({
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
+          )}
+
+          {plan.deductions.length > 0 && (
+            <div className="border-b border-edge px-4 py-3 text-xs text-slate-400">
+              <p className="mb-1 font-medium text-slate-300">Already built on {targetPlanet?.name}</p>
+              <ul className="space-y-0.5">
+                {plan.deductions.map((deduction) => (
+                  <li key={deduction.buildingCode}>
+                    {deduction.buildingCode}: {deduction.requested} planned − {deduction.alreadyBuilt} built ={" "}
+                    <span className="text-slate-200">{deduction.stillToBuild} to build</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {plan.rows.length === 0 ? (

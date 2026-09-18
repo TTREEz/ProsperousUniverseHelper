@@ -10,8 +10,35 @@ import { parseDataFile } from "@/schema/validate";
  * existing data.
  */
 const steps: Record<number, (file: Record<string, unknown>) => Record<string, unknown>> = {
-  // 1 -> 2: add here when the shape changes.
+  /**
+   * Factories were a free-typed name with a hand-entered slot count. They are
+   * now keyed by FIO building code with a building count, so a shopping list
+   * can tell what is already built. The old name was in practice either the
+   * building code or a label starting with one, so it is the best available
+   * source for the code.
+   */
+  1: (file) => {
+    for (const scenario of asArray(file.scenarios)) {
+      for (const planet of asArray(scenario.planets)) {
+        planet.factories = asArray(planet.factories).map((factory) => ({
+          id: factory.id,
+          buildingCode: String(factory.buildingCode ?? factory.name ?? "").trim().toUpperCase(),
+          count: typeof factory.count === "number" ? factory.count : Number(factory.slots) || 1,
+          efficiency: typeof factory.efficiency === "number" ? factory.efficiency : 1,
+          notes: factory.notes ?? null,
+        }));
+      }
+      for (const pkg of asArray(scenario.expansionPackages)) {
+        pkg.deductExistingBuildings = pkg.deductExistingBuildings ?? false;
+      }
+    }
+    return file;
+  },
 };
+
+function asArray(value: unknown): Array<Record<string, any>> {
+  return Array.isArray(value) ? (value as Array<Record<string, any>>) : [];
+}
 
 export type LoadResult =
   | { ok: true; data: PuDataFile; migratedFrom: number | null }

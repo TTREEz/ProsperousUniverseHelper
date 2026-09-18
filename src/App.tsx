@@ -7,6 +7,7 @@ import { Overview } from "@/routes/overview";
 import { OptimizerRoute } from "@/routes/optimizer";
 import { MaterialsRoute } from "@/routes/materials";
 import { PlanetsRoute } from "@/routes/planets";
+import { TradeRoutesRoute } from "@/routes/trade-routes";
 import { ScenariosRoute } from "@/routes/scenarios";
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="optimizer" element={<OptimizerRoute />} />
         <Route path="materials" element={<MaterialsRoute />} />
         <Route path="planets" element={<PlanetsRoute />} />
+        <Route path="trade-routes" element={<TradeRoutesRoute />} />
         <Route path="scenarios" element={<ScenariosRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

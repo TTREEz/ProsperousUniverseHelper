@@ -190,6 +190,80 @@ describe("derivePackagePlan", () => {
     expect(plan.totals.weight).toBeCloseTo(30);
   });
 
+  it("only counts buildings still to be built when deducting", async () => {
+    const plan = await derivePackagePlan(
+      input({
+        items: [buildingItem("FRM", 5)],
+        existingBuildings: [{ buildingCode: "FRM", count: 2 }],
+        deductExisting: true,
+      }),
+      stubProvider(null),
+    );
+
+    // 3 left to build, not 5.
+    expect(row(plan, "BSE")?.requiredQty).toBe(24);
+    expect(plan.deductions).toEqual([
+      { buildingCode: "FRM", requested: 5, alreadyBuilt: 2, stillToBuild: 3 },
+    ]);
+  });
+
+  it("leaves quantities alone when deduction is off", async () => {
+    const plan = await derivePackagePlan(
+      input({
+        items: [buildingItem("FRM", 5)],
+        existingBuildings: [{ buildingCode: "FRM", count: 2 }],
+        deductExisting: false,
+      }),
+      stubProvider(null),
+    );
+
+    expect(row(plan, "BSE")?.requiredQty).toBe(40);
+    expect(plan.deductions).toEqual([]);
+  });
+
+  it("drops a building entirely when enough are already built", async () => {
+    const plan = await derivePackagePlan(
+      input({
+        items: [buildingItem("FRM", 2)],
+        existingBuildings: [{ buildingCode: "FRM", count: 6 }],
+        deductExisting: true,
+      }),
+      stubProvider(null),
+    );
+
+    expect(plan.rows).toEqual([]);
+    expect(plan.deductions[0].stillToBuild).toBe(0);
+  });
+
+  it("does not let two entries claim the same existing buildings", async () => {
+    const plan = await derivePackagePlan(
+      input({
+        items: [buildingItem("FRM", 2), buildingItem("FRM", 3)],
+        existingBuildings: [{ buildingCode: "FRM", count: 3 }],
+        deductExisting: true,
+      }),
+      stubProvider(null),
+    );
+
+    // 3 existing cover the first entry entirely and one of the second, so 2 remain.
+    expect(row(plan, "BSE")?.requiredQty).toBe(16);
+  });
+
+  it("deducts environmental costs too, not just the bill of materials", async () => {
+    const plan = await derivePackagePlan(
+      input({
+        items: [buildingItem("FRM", 4)],
+        existingBuildings: [{ buildingCode: "FRM", count: 3 }],
+        deductExisting: true,
+        targetPlanetCode: "XX-000a",
+      }),
+      stubProvider(planet({ surface: true })),
+    );
+
+    // Only the single remaining building pays the 30 area x 4 rocky cost.
+    expect(row(plan, "MCG")?.requiredQty).toBe(120);
+  });
+
   it("warns instead of silently dropping an unknown building", async () => {
     const plan = await derivePackagePlan(input({ items: [buildingItem("NOPE", 1)] }), stubProvider(null));
 
