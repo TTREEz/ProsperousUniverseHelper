@@ -9,11 +9,51 @@ export function PlanetsRoute() {
   const { file, update } = useAppStore();
   const scenario = activeScenario(file);
   const [name, setName] = useState("");
+  const [systemName, setSystemName] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (!scenario) return null;
   const scenarioId = scenario.id;
   const selected = scenario.planets.find((planet) => planet.id === selectedId) ?? scenario.planets[0] ?? null;
+
+  function addSystem() {
+    const trimmed = systemName.trim();
+    if (!trimmed) return;
+    update((draft) => {
+      draft.scenarios
+        .find((entry) => entry.id === scenarioId)
+        ?.systems.push({ id: newId(), name: trimmed, fioSystemNaturalId: null, notes: null });
+    });
+    setSystemName("");
+  }
+
+  function removeSystem(systemId: string) {
+    update((draft) => {
+      const target = draft.scenarios.find((entry) => entry.id === scenarioId);
+      if (!target) return;
+      target.systems = target.systems.filter((system) => system.id !== systemId);
+      // Deleting a system must not take its planets with it.
+      for (const planet of target.planets) {
+        if (planet.systemId === systemId) planet.systemId = null;
+      }
+      for (const pkg of target.expansionPackages) {
+        if (pkg.systemId === systemId) pkg.systemId = null;
+      }
+    });
+  }
+
+  const grouped = [
+    ...scenario.systems.map((system) => ({
+      key: system.id,
+      label: system.name,
+      planets: scenario.planets.filter((planet) => planet.systemId === system.id),
+    })),
+    {
+      key: "unassigned",
+      label: "Unassigned",
+      planets: scenario.planets.filter((planet) => planet.systemId === null),
+    },
+  ].filter((group) => group.planets.length > 0 || group.key !== "unassigned");
 
   function addPlanet() {
     const trimmed = name.trim();
@@ -47,6 +87,63 @@ export function PlanetsRoute() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4">
       <Card>
+        <CardHeader
+          title="Systems"
+          description="Group planets so trade routes can tell an in-system hop from an interstellar one."
+        />
+        <div className="flex gap-2 border-b border-edge p-4">
+          <Input
+            value={systemName}
+            placeholder="System name, e.g. Moria"
+            onChange={(event) => setSystemName(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && addSystem()}
+          />
+          <Button variant="primary" onClick={addSystem} disabled={!systemName.trim()}>
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        </div>
+
+        {scenario.systems.length === 0 ? (
+          <EmptyState title="No systems yet">
+            Without systems every route is left unlabelled, because two unassigned planets could be anywhere.
+          </EmptyState>
+        ) : (
+          <ul className="divide-y divide-edge/60">
+            {scenario.systems.map((system) => {
+              const count = scenario.planets.filter((planet) => planet.systemId === system.id).length;
+              return (
+                <li key={system.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                  <input
+                    className="flex-1 bg-transparent text-slate-100 outline-none focus:underline"
+                    value={system.name}
+                    onChange={(event) =>
+                      update((draft) => {
+                        const found = draft.scenarios
+                          .find((entry) => entry.id === scenarioId)
+                          ?.systems.find((entry) => entry.id === system.id);
+                        if (found) found.name = event.target.value;
+                      })
+                    }
+                  />
+                  <span className="text-xs text-slate-500">
+                    {count} {count === 1 ? "planet" : "planets"}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeSystem(system.id)}
+                    title="Delete system — its planets stay, just unassigned"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      <Card>
         <CardHeader title="Planets" description={`In scenario “${scenario.name}”`} />
         <div className="flex gap-2 border-b border-edge p-4">
           <Input
@@ -65,20 +162,31 @@ export function PlanetsRoute() {
             Add a planet, then record what is built on it so shopping lists know what you already have.
           </EmptyState>
         ) : (
-          <div className="flex flex-wrap gap-2 p-4">
-            {scenario.planets.map((planet) => (
-              <button
-                key={planet.id}
-                onClick={() => setSelectedId(planet.id)}
-                className={
-                  planet.id === selected?.id
-                    ? "rounded border border-accent bg-accent/15 px-3 py-1.5 text-sm text-accent"
-                    : "rounded border border-edge px-3 py-1.5 text-sm text-slate-300 hover:border-edge-strong"
-                }
-              >
-                {planet.name}
-                <span className="ml-2 text-xs opacity-70">{planet.factories.length}</span>
-              </button>
+          <div className="space-y-3 p-4">
+            {grouped.map((group) => (
+              <div key={group.key}>
+                <p className="mb-1.5 text-xs uppercase tracking-wide text-slate-500">{group.label}</p>
+                {group.planets.length === 0 ? (
+                  <p className="text-xs text-slate-600">No planets assigned yet.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {group.planets.map((planet) => (
+                      <button
+                        key={planet.id}
+                        onClick={() => setSelectedId(planet.id)}
+                        className={
+                          planet.id === selected?.id
+                            ? "rounded border border-accent bg-accent/15 px-3 py-1.5 text-sm text-accent"
+                            : "rounded border border-edge px-3 py-1.5 text-sm text-slate-300 hover:border-edge-strong"
+                        }
+                      >
+                        {planet.name}
+                        <span className="ml-2 text-xs opacity-70">{planet.factories.length}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
