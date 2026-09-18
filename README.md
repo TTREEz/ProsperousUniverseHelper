@@ -73,6 +73,20 @@ per building, and they dominate the real cost: a 490-area base on a rocky planet
 needs 1,960 MCG on top of a few hundred units of everything else. A shopping
 list with no target planet set leaves them out and says so.
 
+### Prices
+
+A shopping list can be costed against any of the six commodity exchanges,
+picked per list or inherited from the target planet's buy exchange. Prices come
+from `/exchange/all`, which covers every material on every exchange in one
+cached request.
+
+The **ask** is used, because that is what buying right now actually costs. About
+a quarter of FIO's exchange records have no ask at all — nobody is selling — and
+substituting the recent average there would invent a price you cannot trade at.
+Those rows are listed as unpriced and named under the total, so a cheap-looking
+estimate is never hiding the materials it could not cost. A row needing more
+units than the exchange has listed is flagged too.
+
 ## Desktop specifics
 
 The window will not close silently on unsaved work: the main process intercepts

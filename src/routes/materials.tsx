@@ -3,7 +3,9 @@ import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber } from "@/lib/formats";
 import { derivePackagePlan, type MaterialPlan } from "@/planner/materials";
+import { applyPrices, type PricedPlan } from "@/planner/pricing";
 import { prosperousProvider } from "@/provider/fio-provider";
+import { EXCHANGES, getExchangePrices } from "@/provider/market";
 import { newId } from "@/schema/defaults";
 import type { ExpansionItemType, ExpansionPackage } from "@/schema/types";
 import { activeScenario, useAppStore } from "@/store/app-store";
@@ -128,9 +130,15 @@ function PackageDetail({
   const [plan, setPlan] = useState<MaterialPlan | null>(null);
   const [deriving, setDeriving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [priced, setPriced] = useState<PricedPlan | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
 
   const targetPlanet = scenario?.planets.find((planet) => planet.id === pkg.targetPlanetId) ?? null;
   const targetPlanetCode = targetPlanet?.fioPlanetNaturalId ?? targetPlanet?.name ?? null;
+
+  // An explicit choice on the list wins; otherwise fall back to the planet's
+  // usual buy exchange so prices appear without configuring each list.
+  const exchange = pkg.exchangeCode ?? targetPlanet?.defaultBuyExchangeCode ?? null;
 
   // Re-derive whenever the inputs that affect the answer change. The provider
   // is cached, so repeat runs after the first are cheap.
@@ -182,6 +190,31 @@ function PackageDetail({
       cancelled = true;
     };
   }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pricing is a separate pass so a market outage costs prices, not the list.
+  useEffect(() => {
+    if (!plan || !exchange) {
+      setPriced(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPriceError(null);
+
+    getExchangePrices(exchange)
+      .then((prices) => {
+        if (!cancelled) setPriced(applyPrices(plan.rows, prices, exchange));
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) return;
+        setPriced(null);
+        setPriceError(caught instanceof Error ? caught.message : String(caught));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [plan, exchange]);
 
   function editPackage(recipe: (target: ExpansionPackage) => void) {
     update((draft) => {
@@ -252,6 +285,28 @@ function PackageDetail({
               {scenario?.planets.map((planet) => (
                 <option key={planet.id} value={planet.id}>
                   {planet.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Exchange" hint="Prices come from here">
+            <Select
+              value={pkg.exchangeCode ?? ""}
+              onChange={(event) =>
+                editPackage((target) => {
+                  target.exchangeCode = event.target.value || null;
+                })
+              }
+            >
+              <option value="">
+                {targetPlanet?.defaultBuyExchangeCode
+                  ? `Planet default (${targetPlanet.defaultBuyExchangeCode})`
+                  : "No prices"}
+              </option>
+              {EXCHANGES.map((code) => (
+                <option key={code} value={code}>
+                  {code}
                 </option>
               ))}
             </Select>
@@ -382,6 +437,35 @@ function PackageDetail({
             </ul>
           )}
 
+          {priceError && (
+            <p className="border-b border-edge px-4 py-2 text-xs text-amber-300">
+              Prices unavailable ({priceError}). Quantities below are unaffected.
+            </p>
+          )}
+
+          {priced && (
+            <div className="border-b border-edge px-4 py-3">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-lg font-semibold text-slate-100">
+                  {formatNumber(priced.estimatedTotal, 0)}
+                </span>
+                <span className="text-xs text-slate-500">estimated at {priced.exchange} ask prices</span>
+              </div>
+              {priced.unpricedTickers.length > 0 && (
+                <p className="mt-1 text-xs text-amber-300">
+                  Not included: {priced.unpricedTickers.join(", ")} — nobody is selling at {priced.exchange}, so the
+                  real total is higher.
+                </p>
+              )}
+              {priced.shortSupplyTickers.length > 0 && (
+                <p className="mt-1 text-xs text-amber-300">
+                  More than {priced.exchange} has listed: {priced.shortSupplyTickers.join(", ")} — buying it all will
+                  move the price or need another exchange.
+                </p>
+              )}
+            </div>
+          )}
+
           {plan.deductions.length > 0 && (
             <div className="border-b border-edge px-4 py-3 text-xs text-slate-400">
               <p className="mb-1 font-medium text-slate-300">Already built on {targetPlanet?.name}</p>
@@ -408,6 +492,8 @@ function PackageDetail({
                     <th className="px-4 py-2 text-right font-medium">To buy</th>
                     <th className="px-4 py-2 text-right font-medium">Have</th>
                     <th className="px-4 py-2 text-right font-medium">Still needed</th>
+                    {priced && <th className="px-4 py-2 text-right font-medium">Ask</th>}
+                    {priced && <th className="px-4 py-2 text-right font-medium">Cost</th>}
                     <th className="px-4 py-2 text-left font-medium">Why</th>
                   </tr>
                 </thead>
@@ -438,6 +524,34 @@ function PackageDetail({
                           formatNumber(row.remainingUnacquired, 2)
                         )}
                       </td>
+
+                      {priced &&
+                        (() => {
+                          const p = priced.rows.find((entry) => entry.ticker === row.ticker);
+                          return (
+                            <>
+                              <td className="px-4 py-2 text-right">
+                                {p?.ask === null || p?.ask === undefined ? (
+                                  <span className="text-xs text-amber-300" title="Nobody is selling this here">
+                                    no ask
+                                  </span>
+                                ) : (
+                                  formatNumber(p.ask, 2)
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                {p?.estimatedCost === null || p?.estimatedCost === undefined ? (
+                                  <span className="text-slate-600">—</span>
+                                ) : (
+                                  <span className={p.shortSupply ? "text-amber-300" : undefined}>
+                                    {formatNumber(p.estimatedCost, 0)}
+                                  </span>
+                                )}
+                              </td>
+                            </>
+                          );
+                        })()}
+
                       <td className="px-4 py-2">
                         <span className="text-xs text-slate-500">{row.sourceKinds.join(", ")}</span>
                       </td>
