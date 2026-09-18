@@ -10,7 +10,7 @@ function fileWithContent(): PuDataFile {
   const planet = createPlanet("Montem");
   const factoryId = newId();
 
-  planet.factories.push({ id: factoryId, buildingCode: "FP", count: 5, efficiency: 1.12, notes: null });
+  planet.factories.push({ id: factoryId, buildingCode: "FP", count: 5, slotsPerBuilding: 1, efficiency: 1.12, notes: null });
   planet.produced.push({ id: newId(), name: "RAT", amount: 140, allocatedSlots: 5, factoryId, notes: null });
   scenario.planets.push(planet);
 
@@ -69,7 +69,7 @@ describe("save file round trip", () => {
     expect(result.data.scenarios[0].expansionPackages).toEqual([]);
   });
 
-  it("upgrades a v1 file's factories to building codes and counts", () => {
+  it("upgrades a v1 file's factories, keeping slots as slots rather than building count", () => {
     const v1 = {
       fileFormat: "pu-toolset-data",
       schemaVersion: 1,
@@ -105,10 +105,12 @@ describe("save file round trip", () => {
 
     expect(result.migratedFrom).toBe(1);
     expect(result.data.schemaVersion).toBe(SCHEMA_VERSION);
+    // The old row described one building with 4 production slots, not 4 buildings.
     expect(result.data.scenarios[0].planets[0].factories[0]).toEqual({
       id: "f1",
       buildingCode: "FRM",
-      count: 4,
+      count: 1,
+      slotsPerBuilding: 4,
       efficiency: 1.1,
       notes: null,
     });

@@ -73,6 +73,26 @@ per building, and they dominate the real cost: a 490-area base on a rocky planet
 needs 1,960 MCG on top of a few hundred units of everything else. A shopping
 list with no target planet set leaves them out and says so.
 
+### Per-planet production
+
+A planet's Production, Resource balance and To buy sections live on the planet
+screen rather than as separate pages, because they are three views of the same
+planet and get read together.
+
+Output comes from batch size, batch time and factory efficiency, over the slots
+a product actually gets. A production order runs whole batches, so a part-full
+final order still costs the time of every batch in it — which is also where the
+reported overbuild comes from.
+
+The balance then nets production against recipe demand, workforce consumption
+and trade routes in both directions. That last part is the point: a material
+arriving from another planet is supply, so it stops appearing as something to
+buy.
+
+**Slots are entered by hand.** FIO publishes a building's area, workforce and
+recipes but not how many production slots it has, so each building on a planet
+carries its own slot count.
+
 ### Prices
 
 A shopping list can be costed against any of the six commodity exchanges,

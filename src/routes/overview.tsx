@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
-import { Card, CardHeader, EmptyState } from "@/components/ui";
+import { Card, CardHeader, EmptyState, Field, Select } from "@/components/ui";
+import { EXCHANGES } from "@/provider/market";
 import { storageDescription } from "@/storage";
 import { activeScenario, useAppStore } from "@/store/app-store";
 
 export function Overview() {
-  const { file, fileName } = useAppStore();
+  const { file, fileName, update } = useAppStore();
   const scenario = activeScenario(file);
   if (!file) return null;
 
@@ -51,7 +52,25 @@ export function Overview() {
 
         <Card>
           <CardHeader title="Your data" />
-          <div className="space-y-2 p-4 text-sm text-slate-400">
+          <div className="space-y-3 p-4 text-sm text-slate-400">
+            <Field label="Default trade station" hint="Used for prices when a list or planet does not set its own">
+              <Select
+                value={file.settings.defaultExchangeCode ?? ""}
+                onChange={(event) =>
+                  update((draft) => {
+                    draft.settings.defaultExchangeCode = event.target.value || null;
+                  })
+                }
+              >
+                <option value="">None</option>
+                {EXCHANGES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
             <p>{storageDescription()}</p>
             <p className="text-xs text-slate-500">
               Everything lives in one file. Copy it to another machine and the app picks up exactly where you left

@@ -136,9 +136,10 @@ function PackageDetail({
   const targetPlanet = scenario?.planets.find((planet) => planet.id === pkg.targetPlanetId) ?? null;
   const targetPlanetCode = targetPlanet?.fioPlanetNaturalId ?? targetPlanet?.name ?? null;
 
-  // An explicit choice on the list wins; otherwise fall back to the planet's
-  // usual buy exchange so prices appear without configuring each list.
-  const exchange = pkg.exchangeCode ?? targetPlanet?.defaultBuyExchangeCode ?? null;
+  // Most specific choice wins: this list, then the planet's usual buy exchange,
+  // then the file-wide default, so prices appear without configuring each list.
+  const exchange =
+    pkg.exchangeCode ?? targetPlanet?.defaultBuyExchangeCode ?? file?.settings.defaultExchangeCode ?? null;
 
   // Re-derive whenever the inputs that affect the answer change. The provider
   // is cached, so repeat runs after the first are cheap.
@@ -302,7 +303,9 @@ function PackageDetail({
               <option value="">
                 {targetPlanet?.defaultBuyExchangeCode
                   ? `Planet default (${targetPlanet.defaultBuyExchangeCode})`
-                  : "No prices"}
+                  : file?.settings.defaultExchangeCode
+                    ? `File default (${file.settings.defaultExchangeCode})`
+                    : "No prices"}
               </option>
               {EXCHANGES.map((code) => (
                 <option key={code} value={code}>

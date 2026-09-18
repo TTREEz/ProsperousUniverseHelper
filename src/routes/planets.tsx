@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
+import { PlanetProduction } from "@/routes/planet-production";
 import { createPlanet, newId } from "@/schema/defaults";
 import type { Planet } from "@/schema/types";
 import { activeScenario, useAppStore } from "@/store/app-store";
@@ -236,7 +237,7 @@ function PlanetDetail({
       if (existing) {
         existing.count += count;
       } else {
-        target.factories.push({ id: newId(), buildingCode: code, count, efficiency: 1, notes: null });
+        target.factories.push({ id: newId(), buildingCode: code, count, slotsPerBuilding: 1, efficiency: 1, notes: null });
       }
     });
     setBuildingCode("");
@@ -348,6 +349,42 @@ function PlanetDetail({
                         if (found) found.count = Number(event.target.value) || 0;
                       })
                     }
+                    className="w-16 rounded border border-edge bg-surface px-2 py-1 text-sm text-slate-100"
+                  />
+                </label>
+
+                <label
+                  className="flex items-center gap-2 text-xs text-slate-500"
+                  title="FIO does not publish slot counts, so enter what this building has"
+                >
+                  slots each
+                  <input
+                    type="number"
+                    min={0}
+                    value={factory.slotsPerBuilding}
+                    onChange={(event) =>
+                      editPlanet((target) => {
+                        const found = target.factories.find((entry) => entry.id === factory.id);
+                        if (found) found.slotsPerBuilding = Number(event.target.value) || 0;
+                      })
+                    }
+                    className="w-16 rounded border border-edge bg-surface px-2 py-1 text-sm text-slate-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2 text-xs text-slate-500">
+                  eff
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={factory.efficiency}
+                    onChange={(event) =>
+                      editPlanet((target) => {
+                        const found = target.factories.find((entry) => entry.id === factory.id);
+                        if (found) found.efficiency = Number(event.target.value) || 0;
+                      })
+                    }
                     className="w-20 rounded border border-edge bg-surface px-2 py-1 text-sm text-slate-100"
                   />
                 </label>
@@ -368,6 +405,8 @@ function PlanetDetail({
           </ul>
         )}
       </Card>
+
+      {scenario && <Card><PlanetProduction planet={planet} scenario={scenario} /></Card>}
     </div>
   );
 }

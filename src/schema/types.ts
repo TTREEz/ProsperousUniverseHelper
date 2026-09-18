@@ -119,6 +119,14 @@ export type Factory = {
   id: string;
   buildingCode: string;
   count: number;
+  /**
+   * Production slots in one of these buildings.
+   *
+   * FIO publishes a building's area, workforce and recipes but not its slot
+   * count, so this is entered by hand. Total slots for the row are this times
+   * `count`.
+   */
+  slotsPerBuilding: number;
   /** Running efficiency as a fraction, e.g. 1.12 for 112%. */
   efficiency: number;
   notes: string | null;
