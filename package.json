@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Prosperous Universe base optimizer and production planner. Local-first, single-file storage, runs as a desktop app or a static site.",
+  "author": "TTREEz",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
