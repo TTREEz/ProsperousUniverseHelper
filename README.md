@@ -39,6 +39,7 @@ src/
   store/      The single in-memory copy of the file and everything that edits it
   provider/   FIO game data, with a persistent cache
   optimizer/  The base-layout solver
+  planner/    Material planning: turns a package into a shopping list
   routes/     Screens
 electron/     Desktop shell (main + preload)
 ```
@@ -57,6 +58,20 @@ Market prices and FIO reference data are deliberately **not** in the save file �
 ### Adding a field
 
 Add it to `types.ts`, then to the matching zod object in `validate.ts` with a `.default(...)`. Old files load unchanged because the default fills the gap — no migration needed. Write a migration in `migrate.ts` only when existing data has to move or be reinterpreted.
+
+### Optimizer to shopping list
+
+The reason the two old tools are one app: a generated base layout can be sent
+straight to the material planner as a list of buildings, which then expands into
+the materials to buy.
+
+A building costs its bill of materials *plus* whatever the destination planet's
+environment demands — MCG on rocky planets, AEF on gaseous ones, and extra
+materials for pressure, gravity and temperature extremes. Those rules live in
+`src/planner/materials.ts`. They are game rules rather than anything FIO reports
+per building, and they dominate the real cost: a 490-area base on a rocky planet
+needs 1,960 MCG on top of a few hundred units of everything else. A shopping
+list with no target planet set leaves them out and says so.
 
 ## Desktop specifics
 

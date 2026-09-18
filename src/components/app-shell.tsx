@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Boxes, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket } from "lucide-react";
+import { Boxes, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket, ShoppingCart } from "lucide-react";
 import { Badge, Button, cn } from "@/components/ui";
 import { activeScenario, useAppStore } from "@/store/app-store";
 import { storageDescription } from "@/storage";
@@ -9,6 +9,7 @@ import { isDesktop } from "@/storage/electron-adapter";
 const NAV = [
   { to: "/", label: "Overview", icon: Gauge, end: true },
   { to: "/optimizer", label: "Base Optimizer", icon: Rocket, end: false },
+  { to: "/materials", label: "Material Planner", icon: ShoppingCart, end: false },
   { to: "/planets", label: "Planets", icon: Boxes, end: false },
   { to: "/scenarios", label: "Scenarios", icon: Layers, end: false },
 ];

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, Save } from "lucide-react";
+import { Play, Save, ShoppingCart } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber, formatPercent } from "@/lib/formats";
 import { optimizeBase } from "@/optimizer/optimize";
@@ -33,6 +33,7 @@ export function OptimizerRoute() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizedBaseResult | null>(null);
+  const [sentToList, setSentToList] = useState<string | null>(null);
 
   const canRun = planetCode.trim().length > 0 && targetProduct.trim().length > 0 && !running;
 
@@ -98,6 +99,56 @@ export function OptimizerRoute() {
         ],
       });
     });
+  }
+
+  /**
+   * The point of merging the two old tools: a generated layout becomes a
+   * shopping list without retyping every building by hand.
+   */
+  function sendToShoppingList() {
+    if (!result || !scenario) return;
+    const scenarioId = scenario.id;
+    const name = `${result.summary.targetProduct} on ${result.summary.planetName ?? result.summary.planetCode}`;
+
+    update((draft) => {
+      const target = draft.scenarios.find((entry) => entry.id === scenarioId);
+      if (!target) return;
+
+      // Housing and production buildings both count; anything the optimizer
+      // could not resolve a building for would only add noise.
+      const buildings = result.buildingPlan.filter((row) => row.status === "planned" && row.count > 0);
+
+      target.expansionPackages.push({
+        id: newId(),
+        name: `${name} — build out`,
+        description: `From the base optimizer: ${buildings.length} building types, ${formatNumber(
+          result.summary.areaUsed,
+          0,
+        )} area.`,
+        systemId: null,
+        targetPlanetId:
+          target.planets.find(
+            (planet) =>
+              planet.fioPlanetNaturalId?.toUpperCase() === result.summary.planetCode.toUpperCase() ||
+              planet.name.toUpperCase() === (result.summary.planetName ?? "").toUpperCase(),
+          )?.id ?? null,
+        exchangeCode: null,
+        enabled: true,
+        items: buildings.map((row, index) => ({
+          id: newId(),
+          itemType: "BUILDING" as const,
+          itemCode: row.buildingCode,
+          itemNameSnapshot: row.buildingName,
+          quantity: row.count,
+          sortOrder: index,
+          notes: row.purpose,
+        })),
+        adjustments: [],
+        checklist: [],
+      });
+    });
+
+    setSentToList(name);
   }
 
   return (
@@ -199,7 +250,15 @@ export function OptimizerRoute() {
         </Card>
       )}
 
-      {result && <OptimizerResult result={result} onSave={saveAsTemplate} canSave={Boolean(scenario)} />}
+      {result && (
+        <OptimizerResult
+          result={result}
+          onSave={saveAsTemplate}
+          onSendToShoppingList={sendToShoppingList}
+          canSave={Boolean(scenario)}
+          sentToList={sentToList}
+        />
+      )}
 
       {!result && !error && (
         <Card>
@@ -216,11 +275,15 @@ export function OptimizerRoute() {
 function OptimizerResult({
   result,
   onSave,
+  onSendToShoppingList,
   canSave,
+  sentToList,
 }: {
   result: OptimizedBaseResult;
   onSave: () => void;
+  onSendToShoppingList: () => void;
   canSave: boolean;
+  sentToList: string | null;
 }) {
   const { summary } = result;
 
@@ -231,11 +294,29 @@ function OptimizerResult({
           title={`${summary.targetProduct} on ${summary.planetName ?? summary.planetCode}`}
           description={`Score ${formatNumber(summary.score, 1)} · ${summary.totalBuildingCount} buildings`}
           actions={
-            <Button size="sm" disabled={!canSave} onClick={onSave} title="Save these inputs and this result to the scenario">
-              <Save className="h-3.5 w-3.5" /> Save as template
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={!canSave}
+                onClick={onSendToShoppingList}
+                title="Create a shopping list from these buildings"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" /> Send to shopping list
+              </Button>
+              <Button size="sm" disabled={!canSave} onClick={onSave} title="Save these inputs and this result to the scenario">
+                <Save className="h-3.5 w-3.5" /> Save as template
+              </Button>
+            </>
           }
         />
+
+        {sentToList && (
+          <p className="border-b border-edge bg-surface-overlay px-4 py-2 text-xs text-slate-300">
+            Added “{sentToList} — build out” to the Material planner. Set its target planet there to include
+            environmental construction costs.
+          </p>
+        )}
         <dl className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
           <Stat label="Output / week" value={formatNumber(summary.targetAchievedPerWeek, 1)} />
           <Stat label="Area used" value={`${formatNumber(summary.areaUsed, 0)} / ${formatNumber(summary.availableArea, 0)}`} />
