@@ -23,8 +23,9 @@ type AppState = {
   boot: () => Promise<void>;
   newFile: (name?: string) => Promise<void>;
   openFile: () => Promise<void>;
-  save: () => Promise<void>;
-  saveAs: () => Promise<void>;
+  /** Resolves true only when the file was actually written. */
+  save: () => Promise<boolean>;
+  saveAs: () => Promise<boolean>;
   setStatus: (status: Status) => void;
 
   /** Applies an immer-style edit, marks the file dirty, and schedules autosave. */
@@ -107,38 +108,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  async save() {
-    const { file } = get();
-    if (!file) return;
-    try {
-      const stamped = produce(file, (draft) => {
-        draft.meta.updatedAt = new Date().toISOString();
-        draft.meta.appVersion = APP_VERSION;
-      });
-      const saved = await storage().save(stamped);
-      if (!saved) return;
-      set({ file: stamped, fileName: saved.name, dirty: false, status: { tone: "info", message: `Saved ${saved.name}.` } });
-      await saveWorkingCopy(stamped, saved.name, true);
-    } catch (error) {
-      set({ status: { tone: "error", message: `Could not save — ${describe(error)}` } });
-    }
+  save() {
+    return writeFile(get, set, (data) => storage().save(data));
   },
 
-  async saveAs() {
-    const { file } = get();
-    if (!file) return;
-    try {
-      const stamped = produce(file, (draft) => {
-        draft.meta.updatedAt = new Date().toISOString();
-        draft.meta.appVersion = APP_VERSION;
-      });
-      const saved = await storage().saveAs(stamped);
-      if (!saved) return;
-      set({ file: stamped, fileName: saved.name, dirty: false, status: { tone: "info", message: `Saved ${saved.name}.` } });
-      await saveWorkingCopy(stamped, saved.name, true);
-    } catch (error) {
-      set({ status: { tone: "error", message: `Could not save — ${describe(error)}` } });
-    }
+  saveAs() {
+    return writeFile(get, set, (data) => storage().saveAs(data));
   },
 
   update(recipe) {
@@ -154,6 +129,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 }));
+
+/**
+ * Shared body of save and saveAs. Returns false when nothing reached disk —
+ * either the user backed out of the dialog or the write failed. The close
+ * prompt depends on this: closing on a cancelled save would discard the work
+ * the prompt just offered to protect.
+ */
+async function writeFile(
+  get: () => AppState,
+  set: (partial: Partial<AppState>) => void,
+  write: (data: PuDataFile) => Promise<{ name: string } | null>,
+): Promise<boolean> {
+  const { file } = get();
+  if (!file) return false;
+
+  try {
+    const stamped = produce(file, (draft) => {
+      draft.meta.updatedAt = new Date().toISOString();
+      draft.meta.appVersion = APP_VERSION;
+    });
+    const saved = await write(stamped);
+    if (!saved) return false;
+
+    set({ file: stamped, fileName: saved.name, dirty: false, status: { tone: "info", message: `Saved ${saved.name}.` } });
+    await saveWorkingCopy(stamped, saved.name, true);
+    return true;
+  } catch (error) {
+    set({ status: { tone: "error", message: `Could not save — ${describe(error)}` } });
+    return false;
+  }
+}
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

@@ -4,6 +4,7 @@ import { Boxes, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket } from "lucid
 import { Badge, Button, cn } from "@/components/ui";
 import { activeScenario, useAppStore } from "@/store/app-store";
 import { storageDescription } from "@/storage";
+import { isDesktop } from "@/storage/electron-adapter";
 
 const NAV = [
   { to: "/", label: "Overview", icon: Gauge, end: true },
@@ -27,14 +28,26 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [save, saveAs]);
 
-  // Browsers only honour a leave-confirmation when there is genuinely unsaved
-  // work, so this is gated on the dirty flag rather than always registered.
+  // On the web, beforeunload gets the browser's own leave-confirmation. Under
+  // Electron it would block the close while showing no dialog at all, leaving
+  // the window impossible to close, so there the main process owns this and
+  // puts up a real Save / Don't save / Cancel prompt instead.
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || isDesktop()) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
+
+  useEffect(() => {
+    window.puDesktop?.setDirty(dirty);
+  }, [dirty]);
+
+  useEffect(() => {
+    return window.puDesktop?.onRequestSave(() => {
+      void save().then((saved) => window.puDesktop?.reportSaveFinished(saved));
+    });
+  }, [save]);
 
   useEffect(() => {
     if (!status) return;

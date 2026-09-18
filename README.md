@@ -58,6 +58,20 @@ Market prices and FIO reference data are deliberately **not** in the save file �
 
 Add it to `types.ts`, then to the matching zod object in `validate.ts` with a `.default(...)`. Old files load unchanged because the default fills the gap — no migration needed. Write a migration in `migrate.ts` only when existing data has to move or be reinterpreted.
 
+## Desktop specifics
+
+The window will not close silently on unsaved work: the main process intercepts
+`close` and shows Save / Don't save / Cancel. "Save" runs the renderer's normal
+save and only closes once the write actually happened, so backing out of the
+file dialog leaves the window open rather than discarding the work.
+
+The bundle is served over a custom `app://` scheme rather than `file://`.
+`file://` is not a real origin, and `indexedDB.open()` there accepts the call
+and then never fires any event — which hung the app on startup, since boot waits
+on it. The custom scheme gives the renderer a proper secure origin. As a second
+line of defence, the IndexedDB layer treats a stalled open as "no storage
+available" instead of waiting forever.
+
 ## Routing
 
 The app uses hash routing (`#/optimizer`). It is the one mode that works unchanged both on GitHub Pages, where there is no server to rewrite deep links, and under Electron's `file://` protocol. Combined with Vite's relative `base`, one build works in both places with no per-target configuration.

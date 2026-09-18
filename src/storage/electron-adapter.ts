@@ -8,6 +8,9 @@ type DesktopBridge = {
   open(): Promise<DesktopFile | null>;
   save(filePath: string, text: string): Promise<DesktopSave>;
   saveAs(suggestedName: string, text: string): Promise<DesktopSave | null>;
+  setDirty(dirty: boolean): void;
+  onRequestSave(handler: () => void): () => void;
+  reportSaveFinished(saved: boolean): void;
 };
 
 declare global {
