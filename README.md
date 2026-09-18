@@ -89,9 +89,9 @@ and trade routes in both directions. That last part is the point: a material
 arriving from another planet is supply, so it stops appearing as something to
 buy.
 
-**Slots are entered by hand.** FIO publishes a building's area, workforce and
-recipes but not how many production slots it has, so each building on a planet
-carries its own slot count.
+**A building is a production slot.** Two farms give two farm slots, so a
+planet's slot count for a building type is simply how many of it stand there.
+Nothing separate needs recording, and FIO does not publish a slot count anyway.
 
 ### Prices
 

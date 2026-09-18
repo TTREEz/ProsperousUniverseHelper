@@ -211,10 +211,10 @@ async function estimateBuildingFootprint(
   }
 
   const building = await ctx.provider.getBuildingByCode(buildingCode);
-  const slotsPerBuilding = Math.max(1, Math.floor(building?.slots ?? 1));
+  // Each building is one production slot, so slots needed is buildings needed.
   const wholeSlots = Math.ceil(requiredSlots);
-  const count = Math.ceil(wholeSlots / slotsPerBuilding);
-  const availableSlots = count * slotsPerBuilding;
+  const count = wholeSlots;
+  const availableSlots = count;
   const area = (building?.areaCost ?? 0) * count;
   const missingDataPenalty = !building || building.areaCost === null ? 80 : 0;
   const estimate = {
@@ -541,10 +541,10 @@ async function expandDemandGraph(
   const buildingPlan: BuildingPlanRow[] = [];
   for (const [buildingCode, group] of factorySlots.entries()) {
     const building = await ctx.provider.getBuildingByCode(buildingCode);
-    const slotsPerBuilding = Math.max(1, Math.floor(building?.slots ?? 1));
+    // Each building is one production slot, so slots needed is buildings needed.
     const wholeSlots = ceilWholeSlots(group.requiredSlots);
-    const count = Math.ceil(wholeSlots / slotsPerBuilding);
-    const totalSlots = count * slotsPerBuilding;
+    const count = wholeSlots;
+    const totalSlots = count;
     const utilization = safeDivide(group.requiredSlots, totalSlots);
     const areaEach = building?.areaCost ?? null;
     const totalArea = areaEach === null ? 0 : areaEach * count;
@@ -573,10 +573,7 @@ async function expandDemandGraph(
       purpose: [...group.products].sort().join(", "),
       utilization,
       status: !building ? "missing-building-data" : areaEach === null ? "missing-area" : "planned",
-      notes: [
-        `Assigned recipe slots ${round(group.requiredSlots, 4)}; whole slots ${wholeSlots}.`,
-        slotsPerBuilding > 1 ? `${slotsPerBuilding} provider-backed slots per building.` : "Assuming one slot per building from provider metadata.",
-      ],
+      notes: [`Assigned recipe slots ${round(group.requiredSlots, 4)}; whole slots ${wholeSlots}.`],
     });
   }
 

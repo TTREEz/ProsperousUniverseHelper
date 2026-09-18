@@ -237,7 +237,7 @@ function PlanetDetail({
       if (existing) {
         existing.count += count;
       } else {
-        target.factories.push({ id: newId(), buildingCode: code, count, slotsPerBuilding: 1, efficiency: 1, notes: null });
+        target.factories.push({ id: newId(), buildingCode: code, count, efficiency: 1, notes: null });
       }
     });
     setBuildingCode("");
@@ -353,24 +353,9 @@ function PlanetDetail({
                   />
                 </label>
 
-                <label
-                  className="flex items-center gap-2 text-xs text-slate-500"
-                  title="FIO does not publish slot counts, so enter what this building has"
-                >
-                  slots each
-                  <input
-                    type="number"
-                    min={0}
-                    value={factory.slotsPerBuilding}
-                    onChange={(event) =>
-                      editPlanet((target) => {
-                        const found = target.factories.find((entry) => entry.id === factory.id);
-                        if (found) found.slotsPerBuilding = Number(event.target.value) || 0;
-                      })
-                    }
-                    className="w-16 rounded border border-edge bg-surface px-2 py-1 text-sm text-slate-100"
-                  />
-                </label>
+                <span className="text-xs text-slate-600" title="Each building is one production slot">
+                  = {factory.count} {factory.count === 1 ? "slot" : "slots"}
+                </span>
 
                 <label className="flex items-center gap-2 text-xs text-slate-500">
                   eff

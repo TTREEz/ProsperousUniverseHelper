@@ -13,7 +13,7 @@ function populatedScenario(): Scenario {
   origin.systemId = systemId;
 
   const factoryId = newId();
-  origin.factories.push({ id: factoryId, buildingCode: "FP", count: 5, slotsPerBuilding: 1, efficiency: 1, notes: null });
+  origin.factories.push({ id: factoryId, buildingCode: "FP", count: 5, efficiency: 1, notes: null });
   origin.produced.push({ id: newId(), name: "RAT", amount: 140, allocatedSlots: 5, factoryId, notes: null });
 
   scenario.planets.push(origin, destination);

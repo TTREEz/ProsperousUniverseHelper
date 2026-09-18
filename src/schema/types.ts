@@ -118,15 +118,13 @@ export type BatchInfo = {
 export type Factory = {
   id: string;
   buildingCode: string;
-  count: number;
   /**
-   * Production slots in one of these buildings.
+   * How many of this building stand on the planet.
    *
-   * FIO publishes a building's area, workforce and recipes but not its slot
-   * count, so this is entered by hand. Total slots for the row are this times
-   * `count`.
+   * This is also the number of production slots it contributes: each building
+   * is one slot, so two farms give two farm slots.
    */
-  slotsPerBuilding: number;
+  count: number;
   /** Running efficiency as a fraction, e.g. 1.12 for 112%. */
   efficiency: number;
   notes: string | null;

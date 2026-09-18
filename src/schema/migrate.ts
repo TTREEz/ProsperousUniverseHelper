@@ -12,12 +12,12 @@ import { parseDataFile } from "@/schema/validate";
 const steps: Record<number, (file: Record<string, unknown>) => Record<string, unknown>> = {
   /**
    * Factories were a free-typed name with a hand-entered slot count. They are
-   * now keyed by FIO building code, with the number of buildings separate from
-   * the slots each one has, so a shopping list can tell what is already built.
+   * now keyed by FIO building code with a building count, so a shopping list
+   * can tell what is already built.
    *
    * The old name was in practice the building code or a label starting with
-   * one. The old `slots` counted production slots for a single building, so it
-   * becomes `slotsPerBuilding` and the row describes one building.
+   * one. Each building is one production slot, so the old `slots` was already
+   * counting buildings and carries straight over.
    */
   1: (file) => {
     for (const scenario of asArray(file.scenarios)) {
@@ -25,9 +25,7 @@ const steps: Record<number, (file: Record<string, unknown>) => Record<string, un
         planet.factories = asArray(planet.factories).map((factory) => ({
           id: factory.id,
           buildingCode: String(factory.buildingCode ?? factory.name ?? "").trim().toUpperCase(),
-          count: typeof factory.count === "number" ? factory.count : 1,
-          slotsPerBuilding:
-            typeof factory.slotsPerBuilding === "number" ? factory.slotsPerBuilding : Number(factory.slots) || 1,
+          count: typeof factory.count === "number" ? factory.count : Number(factory.slots) || 1,
           efficiency: typeof factory.efficiency === "number" ? factory.efficiency : 1,
           notes: factory.notes ?? null,
         }));

@@ -22,7 +22,6 @@ const factory = z.object({
   id: z.string(),
   buildingCode: z.string(),
   count: z.number().default(1),
-  slotsPerBuilding: z.number().default(1),
   efficiency: z.number().default(1),
   notes: nullableString,
 });

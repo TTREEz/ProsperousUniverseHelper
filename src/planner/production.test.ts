@@ -11,16 +11,15 @@ function inputs(overrides: Partial<ProductionInputs> = {}): ProductionInputs {
     needToBuy: [],
     incomingTradeRoutes: [],
     outgoingTradeRoutes: [],
-    slotsByFactoryId: new Map(),
     ...overrides,
   };
 }
 
-const factory = (id: string, buildingCode: string, efficiency = 1) => ({
+/** Each building is one production slot, so count is also the slot count. */
+const factory = (id: string, buildingCode: string, count = 1, efficiency = 1) => ({
   id,
   buildingCode,
-  count: 1,
-  slotsPerBuilding: 1,
+  count,
   efficiency,
   notes: null,
 });
@@ -57,7 +56,6 @@ const route = (id: string, resource: string, amountPerWeek: number, enabled = tr
 function ratSetup(): ProductionInputs {
   return inputs({
     factories: [factory("f1", "FP")],
-    slotsByFactoryId: new Map([["f1", 1]]),
     batchInfos: [batch("RAT", 20, 1)],
     produced: [producedRow("RAT", 200, "f1")],
   });
@@ -74,11 +72,23 @@ describe("calculateProduction", () => {
     expect(rat.outputPerWeek).toBeCloseTo(20 * 168);
   });
 
+  it("gives one production slot per building, so two farms double the output", () => {
+    const one = calculateProduction(ratSetup()).produced[0];
+    const two = calculateProduction({
+      ...ratSetup(),
+      factories: [factory("f1", "FP", 2)],
+    }).produced[0];
+
+    expect(one.effectiveSlots).toBe(1);
+    expect(two.effectiveSlots).toBe(2);
+    expect(two.outputPerHour).toBeCloseTo(one.outputPerHour * 2);
+  });
+
   it("speeds up production as factory efficiency rises", () => {
     const base = calculateProduction(ratSetup()).produced[0];
     const fast = calculateProduction({
       ...ratSetup(),
-      factories: [factory("f1", "FP", 2)],
+      factories: [factory("f1", "FP", 1, 2)],
     }).produced[0];
 
     expect(fast.currentBatchHours).toBeCloseTo(base.currentBatchHours / 2);
@@ -98,8 +108,7 @@ describe("calculateProduction", () => {
   it("splits shared slots between lines with no explicit allocation", () => {
     const plan = calculateProduction(
       inputs({
-        factories: [factory("f1", "FP")],
-        slotsByFactoryId: new Map([["f1", 4]]),
+        factories: [factory("f1", "FP", 4)],
         batchInfos: [batch("RAT", 20, 1), batch("DW", 20, 1)],
         produced: [producedRow("RAT", 200, "f1"), producedRow("DW", 200, "f1")],
       }),
@@ -111,8 +120,7 @@ describe("calculateProduction", () => {
   it("warns when explicit allocations exceed the slots available", () => {
     const plan = calculateProduction(
       inputs({
-        factories: [factory("f1", "FP")],
-        slotsByFactoryId: new Map([["f1", 2]]),
+        factories: [factory("f1", "FP", 2)],
         batchInfos: [batch("RAT", 20, 1)],
         produced: [producedRow("RAT", 200, "f1", 5)],
       }),

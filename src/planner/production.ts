@@ -39,13 +39,12 @@ export type ProductionInputs = {
   needToBuy: NeedToBuy[];
   incomingTradeRoutes: TradeRoute[];
   outgoingTradeRoutes: TradeRoute[];
-  /**
-   * Total production slots per factory row, which is the building's slot count
-   * times how many of it stand on the planet. Resolved from the provider by the
-   * caller so this stays pure.
-   */
-  slotsByFactoryId: Map<string, number>;
 };
+
+/** Each building is one production slot, so two farms give two farm slots. */
+function slotsOf(factory: Factory): number {
+  return factory.count;
+}
 
 export type ProducedRow = {
   id: string;
@@ -126,9 +125,10 @@ function calculateProduced(inputs: ProductionInputs, warnings: Set<string>): Pro
   }
 
   for (const [factoryId, allocated] of allocatedByFactory) {
-    const available = inputs.slotsByFactoryId.get(factoryId) ?? 0;
     const factory = factoryById.get(factoryId);
-    if (factory && allocated > available) {
+    if (!factory) continue;
+    const available = slotsOf(factory);
+    if (allocated > available) {
       warnings.add(
         `Slot allocations on ${factory.buildingCode} add up to ${allocated}, more than the ${available} slots it has.`,
       );
@@ -149,7 +149,7 @@ function calculateProduced(inputs: ProductionInputs, warnings: Set<string>): Pro
     const batchQty = batch?.batchQty ?? 0;
     const batchHours100 = batch?.knownBatchHours ?? 0;
     const efficiency = factory?.efficiency ?? 0;
-    const availableSlots = row.factoryId ? inputs.slotsByFactoryId.get(row.factoryId) ?? 0 : 0;
+    const availableSlots = factory ? slotsOf(factory) : 0;
     const explicitlyAllocated = row.factoryId ? allocatedByFactory.get(row.factoryId) ?? 0 : 0;
     const sharing = row.factoryId ? unallocatedByFactory.get(row.factoryId) ?? 0 : 0;
     const sharedSlots = Math.max(0, availableSlots - explicitlyAllocated);

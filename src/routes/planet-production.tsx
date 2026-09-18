@@ -21,13 +21,6 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
   const { update } = useAppStore();
   const [section, setSection] = useState<Section>("production");
 
-  // FIO does not publish building slot counts, so they are entered per building
-  // on the planet and multiplied by how many stand there.
-  const slotsByFactoryId = useMemo(
-    () => new Map(planet.factories.map((factory) => [factory.id, factory.slotsPerBuilding * factory.count])),
-    [planet.factories],
-  );
-
   const plan: ProductionPlan = useMemo(() => {
     const incoming = scenario.tradeRoutes.filter((route) => route.toPlanetId === planet.id);
     const outgoing = scenario.tradeRoutes.filter((route) => route.fromPlanetId === planet.id);
@@ -41,9 +34,8 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
       needToBuy: planet.needToBuy,
       incomingTradeRoutes: incoming,
       outgoingTradeRoutes: outgoing,
-      slotsByFactoryId,
     });
-  }, [planet, scenario.tradeRoutes, slotsByFactoryId]);
+  }, [planet, scenario.tradeRoutes]);
 
   function edit(recipe: (target: Planet) => void) {
     update((draft) => {
