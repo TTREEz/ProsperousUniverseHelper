@@ -1,5 +1,7 @@
 import { optimizeBase } from "@/optimizer/optimize";
 import type { BasePhase, BasePhasePlan, BuildingPlanRow, OptimizerInput, PhaseBuildingDelta } from "@/optimizer/types";
+import { prosperousProvider } from "@/provider/fio-provider";
+import type { ProsperousProvider } from "@/provider/types";
 
 const PHASE_AREA_FRACTIONS = [0.35, 0.55, 0.75, 1];
 const MIN_OUTPUT_STEP = 0.03;
@@ -70,12 +72,15 @@ function phaseInput(input: OptimizerInput, areaCap: number): OptimizerInput {
   };
 }
 
-export async function generateBasePhases(input: OptimizerInput): Promise<BasePhasePlan> {
+export async function generateBasePhases(
+  input: OptimizerInput,
+  provider: ProsperousProvider = prosperousProvider,
+): Promise<BasePhasePlan> {
   const finalArea = Math.max(1, input.availableArea);
   const candidateAreas = [...new Set(PHASE_AREA_FRACTIONS.map((fraction) => Math.max(1, Math.round(finalArea * fraction))))].sort((a, b) => a - b);
   if (candidateAreas[candidateAreas.length - 1] !== finalArea) candidateAreas.push(finalArea);
 
-  const candidates = await Promise.all(candidateAreas.map(async (areaCap) => optimizeBase(phaseInput(input, areaCap))));
+  const candidates = await Promise.all(candidateAreas.map(async (areaCap) => optimizeBase(phaseInput(input, areaCap), provider)));
   const finalResult = candidates[candidates.length - 1];
   const finalTargetPerWeek = finalResult.summary.targetAchievedPerWeek;
   const phases: BasePhase[] = [];

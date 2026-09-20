@@ -80,6 +80,19 @@ per building, and they dominate the real cost: a 490-area base on a rocky planet
 needs 1,960 MCG on top of a few hundred units of everything else. A shopping
 list with no target planet set leaves them out and says so.
 
+### Build stages
+
+A finished base is not much use as a plan if you cannot afford it yet, so the
+optimizer can break one into stages: it re-solves at 35%, 55% and 75% of the
+area and shows what to add at each step. Every stage is the best base for that
+area rather than a partly-built version of the last, so stopping at one leaves
+something worth running.
+
+Stages that change nothing, or add less than 3% of the final output, are
+dropped, so a plan often ends up with fewer stages than area budgets tried —
+that is the filter working, not a gap. It costs several full solves, so it is
+behind a button rather than part of every run.
+
 ### Choosing recipes
 
 The solver scores each way of making a product by the whole chain beneath it —

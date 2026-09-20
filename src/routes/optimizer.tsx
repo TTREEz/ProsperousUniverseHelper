@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Play, Save, ShoppingCart } from "lucide-react";
+import { Layers, Play, Save, ShoppingCart } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber, formatPercent } from "@/lib/formats";
 import { optimizeBase } from "@/optimizer/optimize";
-import type { OptimizedBaseResult, RecipeDecision } from "@/optimizer/types";
+import { generateBasePhases } from "@/optimizer/phases";
+import type { BasePhasePlan, OptimizedBaseResult, RecipeDecision } from "@/optimizer/types";
 import { prosperousProvider } from "@/provider/fio-provider";
 import { newId } from "@/schema/defaults";
 import type { ObjectiveType, TargetPeriod } from "@/schema/types";
@@ -36,27 +37,44 @@ export function OptimizerRoute() {
   const [sentToList, setSentToList] = useState<string | null>(null);
   /** Product ticker to chosen recipe id, for recipes the solver got wrong. */
   const [recipeOverrides, setRecipeOverrides] = useState<Record<string, string>>({});
+  const [phases, setPhases] = useState<BasePhasePlan | null>(null);
+  const [phasing, setPhasing] = useState(false);
+
+  function currentInput(overrides: Record<string, string>) {
+    return {
+      planetCode: planetCode.trim().toUpperCase(),
+      availableArea,
+      objectiveType,
+      targetProduct: targetProduct.trim().toUpperCase(),
+      targetAmount: targetAmount === "" ? null : targetAmount,
+      targetPeriod: objectiveType === "CLOSEST_TO_TARGET" ? targetPeriod : null,
+      selectedWorkforceInHouseResources: inHouse,
+      selectedRecipeOverrides: overrides,
+      excludedRecipes: [],
+    };
+  }
+
+  async function generatePhases() {
+    setPhasing(true);
+    setError(null);
+    try {
+      setPhases(await generateBasePhases(currentInput(recipeOverrides), prosperousProvider));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setPhasing(false);
+    }
+  }
 
   const canRun = planetCode.trim().length > 0 && targetProduct.trim().length > 0 && !running;
 
   async function run(overrides: Record<string, string> = recipeOverrides) {
     setRunning(true);
     setError(null);
+    // Stages are solved from the same inputs, so a new plan makes them stale.
+    setPhases(null);
     try {
-      const output = await optimizeBase(
-        {
-          planetCode: planetCode.trim().toUpperCase(),
-          availableArea,
-          objectiveType,
-          targetProduct: targetProduct.trim().toUpperCase(),
-          targetAmount: targetAmount === "" ? null : targetAmount,
-          targetPeriod: objectiveType === "CLOSEST_TO_TARGET" ? targetPeriod : null,
-          selectedWorkforceInHouseResources: inHouse,
-          selectedRecipeOverrides: overrides,
-          excludedRecipes: [],
-        },
-        prosperousProvider,
-      );
+      const output = await optimizeBase(currentInput(overrides), prosperousProvider);
       setResult(output);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -276,6 +294,7 @@ export function OptimizerRoute() {
             canSave={Boolean(scenario)}
             sentToList={sentToList}
           />
+          <BuildStages phases={phases} generating={phasing} onGenerate={() => void generatePhases()} />
         </>
       )}
 
@@ -288,6 +307,95 @@ export function OptimizerRoute() {
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * The plan broken into stages you can actually build towards.
+ *
+ * Each stage is the best base that fits in a fraction of the final area, so
+ * every one is a base worth running rather than a half-finished version of the
+ * last. Stages that do not change what you build, or add less than a few
+ * percent of the final output, are dropped.
+ */
+function BuildStages({
+  phases,
+  onGenerate,
+  generating,
+}: {
+  phases: BasePhasePlan | null;
+  onGenerate: () => void;
+  generating: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        title="Build stages"
+        description="Points on the way to the full base where it is worth stopping and running what you have."
+        actions={
+          <Button size="sm" disabled={generating} onClick={onGenerate}>
+            <Layers className="h-3.5 w-3.5" /> {generating ? "Working…" : phases ? "Regenerate" : "Work out stages"}
+          </Button>
+        }
+      />
+
+      {!phases && !generating && (
+        <EmptyState title="No stages yet">
+          This re-solves the base at several smaller area budgets, so it takes a little longer than a single plan.
+        </EmptyState>
+      )}
+
+      {generating && <div className="px-4 py-6 text-sm text-slate-500">Solving the base at each area budget…</div>}
+
+      {phases && !generating && (
+        <ul className="divide-y divide-edge/60">
+          {phases.phases.map((phase) => (
+            <li key={phase.id} className="px-4 py-3">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-sm font-medium text-slate-100">{phase.name}</span>
+                <Badge tone={phase.index === phases.phases.length ? "good" : "accent"}>
+                  {formatNumber(phase.areaCap, 0)} area
+                </Badge>
+                {phase.outputShareOfFinal !== null && (
+                  <span className="text-xs text-slate-400">
+                    {formatPercent(phase.outputShareOfFinal)} of final output
+                  </span>
+                )}
+                <span className="text-xs text-slate-500">
+                  {formatNumber(phase.result.summary.targetAchievedPerWeek, 0)} / week
+                </span>
+                {phase.result.summary.averageUtilization !== null && (
+                  <span className="text-xs text-slate-500">
+                    {formatPercent(phase.result.summary.averageUtilization)} utilization
+                  </span>
+                )}
+              </div>
+
+              {phase.buildingDeltas.length > 0 ? (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {phase.buildingDeltas.map((delta) => (
+                    <span
+                      key={delta.buildingCode}
+                      className="rounded border border-edge px-2 py-0.5 text-xs text-slate-300"
+                      title={`${delta.purpose} — ${formatNumber(delta.totalAreaAdded, 0)} area`}
+                    >
+                      +{delta.addCount} {delta.buildingCode}
+                      {delta.previousCount > 0 && (
+                        <span className="ml-1 opacity-60">
+                          ({delta.previousCount}→{delta.nextCount})
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-slate-600">Nothing new to build at this stage.</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
