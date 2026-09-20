@@ -735,6 +735,48 @@ async function planHousing(provider: ProsperousProvider, workforceTotals: Popula
   return rows;
 }
 
+const CORE_MODULE_CODE = "CM";
+
+/**
+ * The buildings a base needs before any production: the core module.
+ *
+ * Nothing in the demand graph asks for it, because it makes nothing — but it
+ * occupies area and has to be bought. Leaving it out gives a plan that neither
+ * fits on the planet nor costs what the shopping list says.
+ *
+ * It is included even when expanding an existing base. A plan that fits with a
+ * core module also fits without one, and a shopping list set to deduct what is
+ * already built will drop it once the planet records having one.
+ */
+async function planInfrastructure(provider: ProsperousProvider, warnings: Set<string>): Promise<BuildingPlanRow[]> {
+  const building = await provider.getBuildingByCode(CORE_MODULE_CODE).catch(() => null);
+  if (!building) {
+    warnings.add(`${CORE_MODULE_CODE} metadata could not be resolved, so the base core is missing from this plan.`);
+    return [];
+  }
+
+  const areaEach = building.areaCost ?? null;
+  const workforceRequired = emptyPopulation();
+  addPopulation(workforceRequired, building.workforce);
+
+  return [
+    {
+      buildingCode: CORE_MODULE_CODE,
+      buildingName: building.name ?? "Core Module",
+      count: 1,
+      slots: 0,
+      requiredSlots: 0,
+      areaEach,
+      totalArea: areaEach ?? 0,
+      workforceRequired,
+      purpose: "Base core",
+      utilization: null,
+      status: areaEach === null ? "missing-area" : "planned",
+      notes: ["Every base needs one core module before anything else can be built."],
+    },
+  ];
+}
+
 async function solveForRate(
   input: OptimizerInput,
   provider: ProsperousProvider,
@@ -782,9 +824,11 @@ async function solveForRate(
     };
 
     finalGraph = await expandDemandGraph(ctx, demands, sourceByProduct);
-    const productionWorkforceTotals = aggregateWorkforce(finalGraph.buildingPlan);
+    const infrastructure = await planInfrastructure(provider, warnings);
+    const withInfrastructure = [...infrastructure, ...finalGraph.buildingPlan];
+    const productionWorkforceTotals = aggregateWorkforce(withInfrastructure);
     const housingPlan = await planHousing(provider, productionWorkforceTotals, warnings);
-    finalGraph = { ...finalGraph, buildingPlan: [...finalGraph.buildingPlan, ...housingPlan] };
+    finalGraph = { ...finalGraph, buildingPlan: [...withInfrastructure, ...housingPlan] };
     finalWorkforceTotals = aggregateWorkforce(finalGraph.buildingPlan);
     finalWorkforceNeeds = calculateWorkforceNeeds(needs, finalWorkforceTotals, selectedInHouse, input.objectiveType === "MAXIMIZE_SELF_SUFFICIENCY");
 

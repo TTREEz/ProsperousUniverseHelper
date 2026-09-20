@@ -65,6 +65,13 @@ The reason the two old tools are one app: a generated base layout can be sent
 straight to the material planner as a list of buildings, which then expands into
 the materials to buy.
 
+A generated plan starts with a **core module**, which nothing in the demand
+graph asks for because it produces nothing — but it takes 25 area and costs
+materials no other building uses (PSL, LDE). A plan without it neither fits on
+the planet nor costs what the shopping list claims. It is included even when
+expanding, since a list set to deduct what is already built drops it once the
+planet records having one.
+
 A building costs its bill of materials *plus* whatever the destination planet's
 environment demands — MCG on rocky planets, AEF on gaseous ones, and extra
 materials for pressure, gravity and temperature extremes. Those rules live in
