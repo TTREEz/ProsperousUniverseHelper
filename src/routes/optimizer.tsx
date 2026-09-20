@@ -3,7 +3,7 @@ import { Play, Save, ShoppingCart } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber, formatPercent } from "@/lib/formats";
 import { optimizeBase } from "@/optimizer/optimize";
-import type { OptimizedBaseResult } from "@/optimizer/types";
+import type { OptimizedBaseResult, RecipeDecision } from "@/optimizer/types";
 import { prosperousProvider } from "@/provider/fio-provider";
 import { newId } from "@/schema/defaults";
 import type { ObjectiveType, TargetPeriod } from "@/schema/types";
@@ -34,10 +34,12 @@ export function OptimizerRoute() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizedBaseResult | null>(null);
   const [sentToList, setSentToList] = useState<string | null>(null);
+  /** Product ticker to chosen recipe id, for recipes the solver got wrong. */
+  const [recipeOverrides, setRecipeOverrides] = useState<Record<string, string>>({});
 
   const canRun = planetCode.trim().length > 0 && targetProduct.trim().length > 0 && !running;
 
-  async function run() {
+  async function run(overrides: Record<string, string> = recipeOverrides) {
     setRunning(true);
     setError(null);
     try {
@@ -50,7 +52,7 @@ export function OptimizerRoute() {
           targetAmount: targetAmount === "" ? null : targetAmount,
           targetPeriod: objectiveType === "CLOSEST_TO_TARGET" ? targetPeriod : null,
           selectedWorkforceInHouseResources: inHouse,
-          selectedRecipeOverrides: {},
+          selectedRecipeOverrides: overrides,
           excludedRecipes: [],
         },
         prosperousProvider,
@@ -82,7 +84,7 @@ export function OptimizerRoute() {
         targetAmount: targetAmount === "" ? null : targetAmount,
         targetPeriod: objectiveType === "CLOSEST_TO_TARGET" ? targetPeriod : null,
         selectedWorkforceInHouseResources: inHouse,
-        selectedRecipeOverrides: {},
+        selectedRecipeOverrides: recipeOverrides,
         excludedRecipes: [],
         notes: null,
         results: [
@@ -254,13 +256,27 @@ export function OptimizerRoute() {
       )}
 
       {result && (
-        <OptimizerResult
-          result={result}
-          onSave={saveAsTemplate}
-          onSendToShoppingList={sendToShoppingList}
-          canSave={Boolean(scenario)}
-          sentToList={sentToList}
-        />
+        <>
+          <RecipeChoices
+            decisions={result.recipeDecisions}
+            overrides={recipeOverrides}
+            running={running}
+            onChange={(product, recipeId) => {
+              const next = { ...recipeOverrides };
+              if (recipeId === null) delete next[product];
+              else next[product] = recipeId;
+              setRecipeOverrides(next);
+              void run(next);
+            }}
+          />
+          <OptimizerResult
+            result={result}
+            onSave={saveAsTemplate}
+            onSendToShoppingList={sendToShoppingList}
+            canSave={Boolean(scenario)}
+            sentToList={sentToList}
+          />
+        </>
       )}
 
       {!result && !error && (
@@ -272,6 +288,101 @@ export function OptimizerRoute() {
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * Which recipe the solver picked for each product, and what else it could have
+ * used. Its choice folds the whole chain below a recipe into one number, so it
+ * sometimes prefers something that does not match how you actually want to run
+ * the base — this is where you say so.
+ */
+function RecipeChoices({
+  decisions,
+  overrides,
+  running,
+  onChange,
+}: {
+  decisions: RecipeDecision[];
+  overrides: Record<string, string>;
+  running: boolean;
+  onChange: (product: string, recipeId: string | null) => void;
+}) {
+  const withChoices = decisions.filter((decision) => decision.alternatives.length > 1);
+  if (withChoices.length === 0) return null;
+
+  const overriddenCount = Object.keys(overrides).length;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Recipes"
+        description="Only products with more than one way to make them are listed. Changing one re-runs the plan."
+        actions={
+          overriddenCount > 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={running}
+              onClick={() => {
+                for (const product of Object.keys(overrides)) onChange(product, null);
+              }}
+            >
+              Reset {overriddenCount}
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <ul className="divide-y divide-edge/60">
+        {withChoices.map((decision) => {
+          const best = decision.alternatives.find((entry) => entry.id === decision.recommendedRecipeId) ?? null;
+          return (
+            <li key={decision.product} className="px-4 py-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-100">{decision.product}</span>
+                {decision.overridden && <Badge tone="warn">Your choice</Badge>}
+                <span className="text-xs text-slate-500">
+                  {decision.alternatives.length} recipes
+                </span>
+              </div>
+
+              <Select
+                disabled={running}
+                value={overrides[decision.product] ?? decision.selectedRecipeId ?? ""}
+                onChange={(event) =>
+                  onChange(decision.product, event.target.value === best?.id ? null : event.target.value)
+                }
+              >
+                {decision.alternatives.map((alternative) => (
+                  <option key={alternative.id} value={alternative.id}>
+                    {alternative.id === decision.recommendedRecipeId ? "★ " : ""}
+                    {alternative.label}
+                  </option>
+                ))}
+              </Select>
+
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                {decision.alternatives.map((alternative) => {
+                  const isSelected = alternative.id === (overrides[decision.product] ?? decision.selectedRecipeId);
+                  return (
+                    <span
+                      key={alternative.id}
+                      className={isSelected ? "text-slate-300" : undefined}
+                      title={alternative.recommendationReason}
+                    >
+                      {alternative.buildingTicker ?? "?"}:{" "}
+                      {alternative.utilization === null ? "—" : formatPercent(alternative.utilization)} fit
+                      <span className="ml-1 opacity-60">(score {formatNumber(alternative.score, 0)})</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 

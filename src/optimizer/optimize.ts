@@ -252,7 +252,12 @@ async function estimateRecipeCandidate(
     recipe.standardRecipeName ? "standard recipe" : "variant recipe",
   ].join(", ");
 
-  return { ...recipe, score: -estimate.score, reason };
+  return {
+    ...recipe,
+    score: -estimate.score,
+    reason,
+    utilization: safeDivide(estimate.requiredSlots, estimate.availableSlots),
+  };
 }
 
 async function estimateProduct(
@@ -339,7 +344,14 @@ async function chooseRecipe(ctx: SolveContext, product: string, amountPerHour: n
     selectedRecipeLabel: finalRecipe.label,
     recommendedRecipeId: recommended.id,
     recommendationReason: recommended.reason,
-    alternatives: scored.map((recipe) => ({ id: recipe.id, label: recipe.label, buildingTicker: recipe.buildingTicker, recommendationReason: recipe.reason })),
+    alternatives: scored.map((recipe) => ({
+      id: recipe.id,
+      label: recipe.label,
+      buildingTicker: recipe.buildingTicker,
+      recommendationReason: recipe.reason,
+      score: recipe.score,
+      utilization: recipe.utilization,
+    })),
     overridden: Boolean(overrideId && finalRecipe.id === overrideId && finalRecipe.id !== recommended.id),
   });
 

@@ -80,6 +80,18 @@ per building, and they dominate the real cost: a 490-area base on a rocky planet
 needs 1,960 MCG on top of a few hundred units of everything else. A shopping
 list with no target planet set leaves them out and says so.
 
+### Choosing recipes
+
+The solver scores each way of making a product by the whole chain beneath it —
+area, building count, imports and slot fit — so it sometimes picks a recipe with
+poor slot utilisation because what feeds it is cheaper. That is a judgement
+call, and not always the one you want.
+
+The Recipes section lists every product with more than one recipe, marks the
+solver's pick, and shows each alternative's slot fit and score so the trade-off
+is visible. Choosing another re-runs the plan and keeps that choice on the saved
+template. Scores are only comparable between alternatives for the same product.
+
 ### Looking things up
 
 A planet's Natural resources section shows what it yields, with FIO's material

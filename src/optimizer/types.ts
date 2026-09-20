@@ -16,13 +16,29 @@ export type OptimizerInput = {
   excludedRecipes?: string[];
 };
 
+export type RecipeAlternative = {
+  id: string;
+  label: string;
+  buildingTicker: string | null;
+  recommendationReason?: string;
+  /**
+   * How good the solver judged this recipe, higher being better. It folds in
+   * area, building count, imports and slot utilisation for the whole chain
+   * below this recipe, so it is a comparison between alternatives rather than
+   * a number with meaning on its own.
+   */
+  score: number;
+  /** Slot utilisation for this choice, 1 being a perfect fit. */
+  utilization: number | null;
+};
+
 export type RecipeDecision = {
   product: string;
   selectedRecipeId: string | null;
   selectedRecipeLabel: string | null;
   recommendedRecipeId: string | null;
   recommendationReason: string;
-  alternatives: Array<{ id: string; label: string; buildingTicker: string | null; recommendationReason?: string }>;
+  alternatives: RecipeAlternative[];
   overridden: boolean;
 };
 
@@ -110,7 +126,7 @@ export type OptimizedBaseResult = {
   warnings: string[];
 };
 
-export type RecipeWithScore = RecipeCandidate & { score: number; reason: string };
+export type RecipeWithScore = RecipeCandidate & { score: number; reason: string; utilization: number | null };
 
 export type PhaseBuildingDelta = {
   buildingCode: string;
