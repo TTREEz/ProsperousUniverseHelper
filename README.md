@@ -121,8 +121,17 @@ template. Scores are only comparable between alternatives for the same product.
 
 ### Looking things up
 
-A planet's Natural resources section shows what it yields, with FIO's material
-ids resolved to tickers and each type mapped to the building that extracts it.
+A planet's Natural resources section shows what it yields as **units per day**
+for one extraction building at full efficiency, not as the raw concentration
+FIO reports. A concentration is not something you can plan against; the daily
+figure is the one the game shows you. The rates live in `src/lib/extraction.ts`
+and are checked against Katoa, which yields 15 H2O, 17 O, 7 AMM and 16 GAL.
+
+Adding a product to a planet fills in its batch size and time from the same
+data: a recipe publishes both, and a planet's own resources come out at the
+daily rate above over 24 hours. Neither needs typing in. The order size is
+entered in units, with the batch count shown beside it, flagged once it passes
+the 20 batches one order holds.
 
 Systems can be looked up by name or natural id to add their planets in one go.
 FIO has no endpoint listing a system's planets, and the one response carrying

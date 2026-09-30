@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
+import { extractionBuildingFor, extractionPerDay } from "@/lib/extraction";
 import { formatNumber } from "@/lib/formats";
 import { calculateProduction, type ProductionPlan } from "@/planner/production";
 import { prosperousProvider } from "@/provider/fio-provider";
@@ -77,42 +78,41 @@ function ResourcesSection({ planetCode }: { planetCode: string | null }) {
           <tr>
             <th className="px-4 py-2 text-left font-medium">Resource</th>
             <th className="px-4 py-2 text-left font-medium">Type</th>
-            <th className="px-4 py-2 text-right font-medium">Concentration</th>
+            <th className="px-4 py-2 text-right font-medium">Per day</th>
             <th className="px-4 py-2 text-left font-medium">Extracted by</th>
           </tr>
         </thead>
         <tbody>
-          {resources.map((resource) => (
-            <tr key={resource.materialId} className="border-b border-edge/40 last:border-0">
-              <td className="px-4 py-2">
-                <span className="font-medium text-slate-100">{resource.ticker ?? "?"}</span>
-                {resource.name && <span className="ml-2 text-xs text-slate-500">{resource.name}</span>}
-              </td>
-              <td className="px-4 py-2 text-xs text-slate-400">{resource.resourceType ?? "—"}</td>
-              <td className="px-4 py-2 text-right">
-                {resource.factor === null ? "—" : `${formatNumber(resource.factor * 100, 2)}%`}
-              </td>
-              <td className="px-4 py-2 text-xs text-slate-400">{extractorFor(resource.resourceType)}</td>
-            </tr>
-          ))}
+          {resources.map((resource) => {
+            const perDay = extractionPerDay(resource.resourceType, resource.factor);
+            const building = extractionBuildingFor(resource.resourceType);
+            return (
+              <tr key={resource.materialId} className="border-b border-edge/40 last:border-0">
+                <td className="px-4 py-2">
+                  <span className="font-medium text-slate-100">{resource.ticker ?? "?"}</span>
+                  {resource.name && <span className="ml-2 text-xs text-slate-500">{resource.name}</span>}
+                </td>
+                <td className="px-4 py-2 text-xs text-slate-400">{resource.resourceType ?? "—"}</td>
+                <td className="px-4 py-2 text-right">
+                  {perDay === null ? (
+                    "—"
+                  ) : (
+                    <span className="font-medium text-slate-100">{perDay}</span>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-xs text-slate-400">{building ?? "—"}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      <p className="px-4 py-2 text-xs text-slate-600">
+        Units one extraction building pulls per day at 100% efficiency.
+      </p>
     </div>
   );
 }
 
-function extractorFor(resourceType: string | null): string {
-  switch ((resourceType ?? "").toUpperCase()) {
-    case "MINERAL":
-      return "EXT — Extractor";
-    case "LIQUID":
-      return "RIG — Rig";
-    case "GASEOUS":
-      return "COL — Collector";
-    default:
-      return "—";
-  }
-}
 
 export function PlanetProduction({ planet, scenario }: { planet: Planet; scenario: Scenario }) {
   const { update } = useAppStore();
@@ -227,23 +227,74 @@ function ProductionSection({
   edit: (recipe: (target: Planet) => void) => void;
 }) {
   const [product, setProduct] = useState("");
+  const [looking, setLooking] = useState(false);
 
-  function addProduct() {
+  /**
+   * Batch size and time are published per recipe, and a planet's own resources
+   * come out at a rate set by their concentration, so neither needs typing in.
+   * Anything the provider cannot answer is left at 1 for the user to fill.
+   */
+  async function resolveBatch(
+    name: string,
+  ): Promise<{ batchQty: number; batchHours: number; buildingCode: string | null }> {
+    const planetCode = planet.fioPlanetNaturalId ?? planet.name;
+    if (planetCode) {
+      const info = await prosperousProvider.getPlanetByIdOrCode(planetCode).catch(() => null);
+      const resource = info?.resources.find((entry) => entry.ticker?.toUpperCase() === name);
+      if (resource) {
+        const perDay = extractionPerDay(resource.resourceType, resource.factor);
+        if (perDay) {
+          // An extractor runs continuously, so a day's yield is the batch.
+          return { batchQty: perDay, batchHours: 24, buildingCode: extractionBuildingFor(resource.resourceType) };
+        }
+      }
+    }
+
+    const recipes = await prosperousProvider.getRecipesForProduct(name).catch(() => []);
+    const best = recipes[0];
+    if (!best) return { batchQty: 1, batchHours: 1, buildingCode: null };
+    return { batchQty: best.outputAmount, batchHours: best.batchHours, buildingCode: best.buildingTicker };
+  }
+
+  async function addProduct() {
     const name = product.trim().toUpperCase();
     if (!name) return;
+
+    setLooking(true);
+    const resolved = await resolveBatch(name).catch(() => ({ batchQty: 1, batchHours: 1, buildingCode: null }));
+    setLooking(false);
+
     edit((target) => {
-      if (!target.batchInfos.some((row) => row.name.toUpperCase() === name)) {
-        target.batchInfos.push({ id: newId(), name, batchQty: 1, knownBatchHours: 1, knownEff: 1, notes: null });
+      const existing = target.batchInfos.find((row) => row.name.toUpperCase() === name);
+      if (existing) {
+        existing.batchQty = resolved.batchQty;
+        existing.knownBatchHours = resolved.batchHours;
+      } else {
+        target.batchInfos.push({
+          id: newId(),
+          name,
+          batchQty: resolved.batchQty,
+          knownBatchHours: resolved.batchHours,
+          knownEff: 1,
+          notes: null,
+        });
       }
+
+      // Put it in the building that actually makes it, when that is here.
+      const match = resolved.buildingCode
+        ? target.factories.find((factory) => factory.buildingCode === resolved.buildingCode)
+        : undefined;
+
       target.produced.push({
         id: newId(),
         name,
         amount: 0,
         allocatedSlots: null,
-        factoryId: target.factories[0]?.id ?? null,
-        notes: null,
+        factoryId: (match ?? target.factories[0])?.id ?? null,
+        notes: resolved.buildingCode && !match ? `Needs a ${resolved.buildingCode} on this planet` : null,
       });
     });
+
     setProduct("");
   }
 
@@ -256,10 +307,10 @@ function ProductionSection({
             value={product}
             placeholder="Material ticker, e.g. RAT"
             onChange={(event) => setProduct(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && addProduct()}
+            onKeyDown={(event) => event.key === "Enter" && void addProduct()}
           />
-          <Button variant="primary" onClick={addProduct} disabled={!product.trim()}>
-            <Plus className="h-3.5 w-3.5" /> Add product
+          <Button variant="primary" onClick={() => void addProduct()} disabled={!product.trim() || looking}>
+            <Plus className="h-3.5 w-3.5" /> {looking ? "Looking up…" : "Add product"}
           </Button>
         </div>
 
@@ -294,6 +345,23 @@ function ProductionSection({
                           })
                         }
                       />
+                      {/* An order queues whole batches, up to 20 in one go. */}
+                      {derived && derived.batchQty > 0 && row.amount > 0 && (
+                        <span
+                          className={
+                            Math.ceil(row.amount / derived.batchQty) > 20
+                              ? "ml-2 text-xs text-amber-300"
+                              : "ml-2 text-xs text-slate-600"
+                          }
+                          title={
+                            Math.ceil(row.amount / derived.batchQty) > 20
+                              ? "More than one order: an order holds at most 20 batches"
+                              : "Batches in this order"
+                          }
+                        >
+                          {Math.ceil(row.amount / derived.batchQty)}×
+                        </span>
+                      )}
                     </td>
                     <td className="py-1.5">
                       <Select

@@ -1,3 +1,9 @@
+import {
+  EXTRACTION_DAILY_MULTIPLIER_BY_RESOURCE_TYPE,
+  extractionBuildingFor,
+  extractionPerDay,
+  normalizeResourceType,
+} from "@/lib/extraction";
 import { normalizeTicker } from "@/lib/formats";
 import { prosperousProvider } from "@/provider/fio-provider";
 import type {
@@ -25,20 +31,6 @@ const MAX_CHAIN_EXPANSIONS = 160;
 const MAX_WORKFORCE_ITERATIONS = 5;
 const MAX_RECIPE_LOOKAHEAD_DEPTH = 7;
 const DEFAULT_TARGET_PER_HOUR = 1;
-const EXTRACTION_BUILDING_BY_RESOURCE_TYPE: Record<string, string> = {
-  GASEOUS: "COL",
-  GAS: "COL",
-  LIQUID: "RIG",
-  MINERAL: "EXT",
-  ORE: "EXT",
-};
-const EXTRACTION_DAILY_MULTIPLIER_BY_RESOURCE_TYPE: Record<string, number> = {
-  GASEOUS: 60,
-  GAS: 60,
-  LIQUID: 70,
-  MINERAL: 70,
-  ORE: 70,
-};
 const HOUSING_BUILDINGS: Array<{
   code: string;
   label: string;
@@ -362,27 +354,12 @@ function addDemand(demands: Map<string, number>, product: string, amountPerHour:
   demands.set(product, (demands.get(product) ?? 0) + amountPerHour);
 }
 
-function normalizedResourceType(resource: PlanetResource) {
-  return (resource.resourceType ?? "").trim().toUpperCase();
-}
 
-function extractionBuildingCode(resource: PlanetResource) {
-  const resourceType = normalizedResourceType(resource);
-  return EXTRACTION_BUILDING_BY_RESOURCE_TYPE[resourceType] ?? null;
-}
 
-function extractionDailyYield(resource: PlanetResource) {
-  const resourceType = normalizedResourceType(resource);
-  const multiplier = EXTRACTION_DAILY_MULTIPLIER_BY_RESOURCE_TYPE[resourceType] ?? null;
-  const factor = resource.factor ?? 0;
-  if (!multiplier || factor <= 0) return null;
-  return Math.round(factor * multiplier);
-}
 
 function extractionLabel(product: string, resource: PlanetResource, buildingCode: string, dailyYield: number) {
-  const resourceType = (resource.resourceType ?? "").trim().toUpperCase();
   const typeLabel = resource.resourceType ? `${resource.resourceType.toLowerCase()} deposit` : "local deposit";
-  const multiplier = EXTRACTION_DAILY_MULTIPLIER_BY_RESOURCE_TYPE[resourceType];
+  const multiplier = EXTRACTION_DAILY_MULTIPLIER_BY_RESOURCE_TYPE[normalizeResourceType(resource.resourceType)];
   return `${buildingCode}: extract ${round(dailyYield, 4)} ${product} / day from ${typeLabel}${multiplier ? ` (factor x ${multiplier})` : ""}`;
 }
 
@@ -390,8 +367,8 @@ function resolveExtraction(ctx: SolveContext, product: string, emitWarnings = tr
   const resource = ctx.localResourceByTicker.get(product);
   if (!resource) return null;
 
-  const buildingCode = extractionBuildingCode(resource);
-  const dailyYield = extractionDailyYield(resource);
+  const buildingCode = extractionBuildingFor(resource.resourceType);
+  const dailyYield = extractionPerDay(resource.resourceType, resource.factor);
   if (!buildingCode) {
     if (emitWarnings) ctx.warnings.add(`${product} is present on the planet, but resource type '${resource.resourceType ?? "unknown"}' is not mapped to an extraction building.`);
     return null;
