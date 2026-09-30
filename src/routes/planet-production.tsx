@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
 import { extractionBuildingFor, extractionPerDay } from "@/lib/extraction";
 import { formatNumber } from "@/lib/formats";
+import { applyRecipeToPlanet, type RecipeChoice } from "@/planner/apply-recipe";
 import { calculateProduction, type ProductionPlan } from "@/planner/production";
 import { prosperousProvider } from "@/provider/fio-provider";
 import type { PlanetResource } from "@/provider/types";
@@ -19,6 +20,46 @@ import { useAppStore } from "@/store/app-store";
  */
 
 type Section = "production" | "balance" | "buy" | "resources";
+
+/**
+ * Every way a product can be made here: its recipes, plus extraction when the
+ * planet holds that resource itself.
+ */
+async function recipeChoicesFor(product: string, planetCode: string | null): Promise<RecipeChoice[]> {
+  const choices: RecipeChoice[] = [];
+
+  if (planetCode) {
+    const planet = await prosperousProvider.getPlanetByIdOrCode(planetCode).catch(() => null);
+    const resource = planet?.resources.find((entry) => entry.ticker?.toUpperCase() === product);
+    const perDay = resource ? extractionPerDay(resource.resourceType, resource.factor) : null;
+    const building = resource ? extractionBuildingFor(resource.resourceType) : null;
+
+    if (perDay && building) {
+      choices.push({
+        id: `extract:${building}`,
+        label: `${building}: extract ${perDay} ${product} / day`,
+        batchQty: perDay,
+        batchHours: 24,
+        inputs: [],
+        buildingCode: building,
+      });
+    }
+  }
+
+  const recipes = await prosperousProvider.getRecipesForProduct(product).catch(() => []);
+  for (const recipe of recipes) {
+    choices.push({
+      id: recipe.id,
+      label: recipe.label,
+      batchQty: recipe.outputAmount,
+      batchHours: recipe.batchHours,
+      inputs: recipe.inputs.map((input) => ({ ticker: input.ticker, amount: input.amount })),
+      buildingCode: recipe.buildingTicker,
+    });
+  }
+
+  return choices;
+}
 
 /** What the planet itself yields, straight from FIO. */
 function ResourcesSection({ planetCode }: { planetCode: string | null }) {
@@ -228,61 +269,53 @@ function ProductionSection({
 }) {
   const [product, setProduct] = useState("");
   const [looking, setLooking] = useState(false);
+  /** Every way each product on this planet can be made, for the pickers. */
+  const [choicesByProduct, setChoicesByProduct] = useState<Record<string, RecipeChoice[]>>({});
 
-  /**
-   * Batch size and time are published per recipe, and a planet's own resources
-   * come out at a rate set by their concentration, so neither needs typing in.
-   * Anything the provider cannot answer is left at 1 for the user to fill.
-   */
-  async function resolveBatch(
-    name: string,
-  ): Promise<{ batchQty: number; batchHours: number; buildingCode: string | null }> {
+  const productNames = useMemo(
+    () => [...new Set(planet.produced.map((row) => row.name.trim().toUpperCase()).filter(Boolean))],
+    [planet.produced],
+  );
+
+  // Look up the options once per product, so the pickers can be opened without
+  // waiting and switching a recipe costs nothing.
+  useEffect(() => {
+    let cancelled = false;
     const planetCode = planet.fioPlanetNaturalId ?? planet.name;
-    if (planetCode) {
-      const info = await prosperousProvider.getPlanetByIdOrCode(planetCode).catch(() => null);
-      const resource = info?.resources.find((entry) => entry.ticker?.toUpperCase() === name);
-      if (resource) {
-        const perDay = extractionPerDay(resource.resourceType, resource.factor);
-        if (perDay) {
-          // An extractor runs continuously, so a day's yield is the batch.
-          return { batchQty: perDay, batchHours: 24, buildingCode: extractionBuildingFor(resource.resourceType) };
-        }
-      }
-    }
 
-    const recipes = await prosperousProvider.getRecipesForProduct(name).catch(() => []);
-    const best = recipes[0];
-    if (!best) return { batchQty: 1, batchHours: 1, buildingCode: null };
-    return { batchQty: best.outputAmount, batchHours: best.batchHours, buildingCode: best.buildingTicker };
-  }
+    Promise.all(
+      productNames
+        .filter((name) => !(name in choicesByProduct))
+        .map(async (name) => [name, await recipeChoicesFor(name, planetCode)] as const),
+    ).then((entries) => {
+      if (!cancelled && entries.length) {
+        setChoicesByProduct((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productNames]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function addProduct() {
     const name = product.trim().toUpperCase();
     if (!name) return;
 
     setLooking(true);
-    const resolved = await resolveBatch(name).catch(() => ({ batchQty: 1, batchHours: 1, buildingCode: null }));
+    const planetCode = planet.fioPlanetNaturalId ?? planet.name;
+    const choices = await recipeChoicesFor(name, planetCode);
     setLooking(false);
 
+    setChoicesByProduct((current) => ({ ...current, [name]: choices }));
+    const chosen = choices[0] ?? { id: null, label: null, batchQty: 1, batchHours: 1, inputs: [], buildingCode: null };
+
     edit((target) => {
-      const existing = target.batchInfos.find((row) => row.name.toUpperCase() === name);
-      if (existing) {
-        existing.batchQty = resolved.batchQty;
-        existing.knownBatchHours = resolved.batchHours;
-      } else {
-        target.batchInfos.push({
-          id: newId(),
-          name,
-          batchQty: resolved.batchQty,
-          knownBatchHours: resolved.batchHours,
-          knownEff: 1,
-          notes: null,
-        });
-      }
+      applyRecipeToPlanet(target, name, chosen);
 
       // Put it in the building that actually makes it, when that is here.
-      const match = resolved.buildingCode
-        ? target.factories.find((factory) => factory.buildingCode === resolved.buildingCode)
+      const match = chosen.buildingCode
+        ? target.factories.find((factory) => factory.buildingCode === chosen.buildingCode)
         : undefined;
 
       target.produced.push({
@@ -291,11 +324,27 @@ function ProductionSection({
         amount: 0,
         allocatedSlots: null,
         factoryId: (match ?? target.factories[0])?.id ?? null,
-        notes: resolved.buildingCode && !match ? `Needs a ${resolved.buildingCode} on this planet` : null,
+        notes: chosen.buildingCode && !match ? `Needs a ${chosen.buildingCode} on this planet` : null,
       });
     });
 
     setProduct("");
+  }
+
+  function chooseRecipe(name: string, recipeId: string) {
+    const choice = (choicesByProduct[name] ?? []).find((entry) => (entry.id ?? "") === recipeId);
+    if (!choice) return;
+    edit((target) => {
+      applyRecipeToPlanet(target, name, choice);
+      const match = choice.buildingCode
+        ? target.factories.find((factory) => factory.buildingCode === choice.buildingCode)
+        : undefined;
+      if (match) {
+        for (const row of target.produced) {
+          if (row.name.trim().toUpperCase() === name) row.factoryId = match.id;
+        }
+      }
+    });
   }
 
   return (
@@ -409,13 +458,36 @@ function ProductionSection({
       </div>
 
       <div>
-        <SubHeading title="Batch info" hint="How much one batch makes and how long it takes at 100% efficiency." />
+        <SubHeading
+          title="Batch info"
+          hint="Filled in from the recipe. Change the recipe and the batch and its ingredients follow."
+        />
         {planet.batchInfos.length === 0 ? (
           <p className="text-xs text-slate-600">Added automatically when you add a product.</p>
         ) : (
-          <ul className="space-y-1">
-            {planet.batchInfos.map((row) => (
-              <li key={row.id} className="flex items-center gap-2 text-sm">
+          <ul className="space-y-2">
+            {planet.batchInfos.map((row) => {
+              const options = choicesByProduct[row.name.trim().toUpperCase()] ?? [];
+              return (
+                <li key={row.id} className="space-y-1">
+                  {options.length > 1 && (
+                    <Select
+                      className="w-full py-1 text-xs"
+                      value={row.recipeId ?? ""}
+                      onChange={(event) => chooseRecipe(row.name.trim().toUpperCase(), event.target.value)}
+                    >
+                      {options.map((option) => (
+                        <option key={option.id ?? option.label ?? ""} value={option.id ?? ""}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  {options.length === 1 && row.recipeLabel && (
+                    <p className="text-xs text-slate-600">{row.recipeLabel}</p>
+                  )}
+
+                  <div className="flex items-center gap-2 text-sm">
                 <span className="w-16 font-medium text-slate-100">{row.name}</span>
                 <span className="text-xs text-slate-500">qty</span>
                 <Num
@@ -451,8 +523,10 @@ function ProductionSection({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
-              </li>
-            ))}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

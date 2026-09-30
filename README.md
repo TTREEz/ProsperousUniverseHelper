@@ -131,11 +131,19 @@ FIO reports. A concentration is not something you can plan against; the daily
 figure is the one the game shows you. The rates live in `src/lib/extraction.ts`
 and are checked against Katoa, which yields 15 H2O, 17 O, 7 AMM and 16 GAL.
 
-Adding a product to a planet fills in its batch size and time from the same
-data: a recipe publishes both, and a planet's own resources come out at the
-daily rate above over 24 hours. Neither needs typing in. The order size is
-entered in units, with the batch count shown beside it, flagged once it passes
-the 20 batches one order holds.
+Adding a product to a planet fills in everything the recipe determines: batch
+size, batch time, and the ingredients it consumes. A product's own resources on
+the planet count as a recipe too — extraction at the daily rate above, over 24
+hours — so water on a planet that has water needs no typing either.
+
+Where a product can be made more than one way, the batch row carries a picker.
+Changing it rewrites the batch numbers and **replaces** that product's
+ingredient rows rather than adding to them, so switching away from a recipe
+cannot leave its ingredients behind inflating demand. Other products are left
+alone.
+
+The order size is entered in units, with the batch count shown beside it,
+flagged once it passes the 20 batches one order holds.
 
 Systems can be looked up by name or natural id to add their planets in one go.
 FIO has no endpoint listing a system's planets, and the one response carrying

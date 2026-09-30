@@ -1,6 +1,6 @@
 {
   "name": "pu-toolset",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "description": "Prosperous Universe base optimizer and production planner. Local-first, single-file storage, runs as a desktop app or a static site.",
   "author": "TTREEz",

@@ -14,7 +14,9 @@ const batchInfo = z.object({
   name: z.string(),
   batchQty: z.number(),
   knownBatchHours: z.number(),
-  knownEff: z.number(),
+  knownEff: z.number().default(1),
+  recipeId: z.string().nullable().default(null),
+  recipeLabel: z.string().nullable().default(null),
   notes: nullableString,
 });
 

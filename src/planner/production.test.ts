@@ -30,6 +30,8 @@ const batch = (name: string, batchQty: number, knownBatchHours: number) => ({
   batchQty,
   knownBatchHours,
   knownEff: 1,
+  recipeId: null,
+  recipeLabel: null,
   notes: null,
 });
 

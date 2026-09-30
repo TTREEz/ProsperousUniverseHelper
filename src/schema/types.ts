@@ -104,6 +104,13 @@ export type BatchInfo = {
   batchQty: number;
   knownBatchHours: number;
   knownEff: number;
+  /**
+   * Which recipe these numbers came from, so the choice survives a reload and
+   * can be changed without retyping the batch size, time and ingredients.
+   * Null for a product whose numbers were entered by hand.
+   */
+  recipeId: string | null;
+  recipeLabel: string | null;
   notes: string | null;
 };
 
