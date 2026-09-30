@@ -2,6 +2,10 @@
 
 Base optimization and production planning for *Prosperous Universe*, in one app.
 
+- **Use it in a browser:** https://ttreez.github.io/ProsperousUniverseHelper/
+- **Download for Windows:** [latest release](https://github.com/TTREEz/ProsperousUniverseHelper/releases/latest) —
+  the installer updates itself, the portable exe does not.
+
 This is the consolidation of two earlier tools: a base-layout optimizer and a production/material planner. Both were Next.js apps backed by Prisma — the planner needed a hosted Postgres database. Neither is true here any more.
 
 ## How it works

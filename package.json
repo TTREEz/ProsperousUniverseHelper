@@ -64,7 +64,8 @@
       {
         "provider": "github",
         "owner": "TTREEz",
-        "repo": "ProsperousUniverseHelper"
+        "repo": "ProsperousUniverseHelper",
+        "releaseType": "release"
       }
     ],
     "win": {
