@@ -119,6 +119,80 @@ describe("calculateProduction", () => {
     expect(plan.produced.map((row) => row.effectiveSlots)).toEqual([2, 2]);
   });
 
+  it("splits a shared building by how long each order runs, not evenly", () => {
+    // The real case this came from: rations take 5d8h an order, water 2d3h.
+    // Queueing one of each in turn is not half the building each.
+    const plan = calculateProduction(
+      inputs({
+        factories: [factory("f1", "FP", 3)],
+        batchInfos: [batch("RAT", 10, 16), batch("DW", 10, 17)],
+        produced: [producedRow("RAT", 80, "f1"), producedRow("DW", 30, "f1")],
+      }),
+    );
+
+    const rat = plan.produced.find((row) => row.name === "RAT")!;
+    const dw = plan.produced.find((row) => row.name === "DW")!;
+
+    expect(rat.totalHours).toBe(128); // 8 batches x 16h = 5d 8h
+    expect(dw.totalHours).toBe(51); //  3 batches x 17h = 2d 3h
+
+    expect(rat.capacityShare).toBeCloseTo(128 / 179, 4);
+    expect(dw.capacityShare).toBeCloseTo(51 / 179, 4);
+    expect(rat.effectiveSlots + dw.effectiveSlots).toBeCloseTo(3);
+  });
+
+  it("no longer overstates the shorter order's output, and so its inputs", () => {
+    const setup = inputs({
+      factories: [factory("f1", "FP", 3)],
+      batchInfos: [batch("RAT", 10, 16), batch("DW", 10, 17)],
+      produced: [producedRow("RAT", 80, "f1"), producedRow("DW", 30, "f1")],
+      // Water is what drinking water is made from, which is where the phantom
+      // shortage came from.
+      recipeInfos: [{ id: "r1", product: "DW", ingredient: "H2O", qtyPerProductBatch: 10 }],
+    });
+
+    const plan = calculateProduction(setup);
+    const dw = plan.produced.find((row) => row.name === "DW")!;
+    const h2o = plan.balance.find((row) => row.resource === "H2O")!;
+
+    // An even split would give water 1.5 of 3 slots; its orders only justify 0.855.
+    expect(dw.effectiveSlots).toBeCloseTo(3 * (51 / 179), 4);
+    expect(dw.effectiveSlots).toBeLessThan(1.5);
+
+    // So the water it draws is lower than the even split implied.
+    const evenSplitDraw = (h2o.recipeConsumedPerHour / dw.effectiveSlots) * 1.5;
+    expect(h2o.recipeConsumedPerHour).toBeLessThan(evenSplitDraw);
+  });
+
+  it("still splits evenly when the orders take the same time", () => {
+    const plan = calculateProduction(
+      inputs({
+        factories: [factory("f1", "FP", 4)],
+        batchInfos: [batch("RAT", 20, 1), batch("DW", 20, 1)],
+        produced: [producedRow("RAT", 200, "f1"), producedRow("DW", 200, "f1")],
+      }),
+    );
+
+    expect(plan.produced.map((row) => row.effectiveSlots)).toEqual([2, 2]);
+  });
+
+  it("lets an explicit slot allocation opt out of sharing", () => {
+    const plan = calculateProduction(
+      inputs({
+        factories: [factory("f1", "FP", 3)],
+        batchInfos: [batch("RAT", 10, 16), batch("DW", 10, 17)],
+        produced: [producedRow("RAT", 80, "f1", 2), producedRow("DW", 30, "f1")],
+      }),
+    );
+
+    const rat = plan.produced.find((row) => row.name === "RAT")!;
+    const dw = plan.produced.find((row) => row.name === "DW")!;
+
+    expect(rat.effectiveSlots).toBe(2);
+    // Water takes what is left, since nothing else is sharing it.
+    expect(dw.effectiveSlots).toBeCloseTo(1);
+  });
+
   it("warns when explicit allocations exceed the slots available", () => {
     const plan = calculateProduction(
       inputs({

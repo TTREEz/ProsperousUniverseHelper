@@ -145,6 +145,18 @@ alone.
 The order size is entered in units, with the batch count shown beside it,
 flagged once it passes the 20 batches one order holds.
 
+### Sharing a building
+
+Lines sharing a building split it **by how long their orders run**, not evenly.
+Queueing one order of each in turn is the usual way to share a building, and a
+longer order holds the slot longer: a 128-hour rations order against a 51-hour
+water order is 71% and 29% of the building, not half each.
+
+Splitting evenly overstates whatever the *shorter* order makes, and therefore
+overstates what that product consumes — which shows up as a shortage of its
+inputs that never appears in game. Each line shows its share next to its slots,
+and setting slots explicitly on a line opts it out of sharing.
+
 **Workforce is not entered either.** Only production buildings employ people —
 habitation, storage and the core module report no workers — so a planet's
 population is the sum of what its buildings need, and what that population gets

@@ -56,6 +56,8 @@ export type ProducedRow = {
   /** Batch time adjusted for the factory's efficiency. */
   currentBatchHours: number;
   effectiveSlots: number;
+  /** Fraction of the building this line occupies, 1 being all of it. */
+  capacityShare: number | null;
   totalHours: number;
   outputPerHour: number;
   outputPerWeek: number;
@@ -107,21 +109,57 @@ export type ProductionPlan = {
   warnings: string[];
 };
 
+/**
+ * How long one slot takes to finish this line's whole order.
+ *
+ * Orders run whole batches, and a part-full final order still costs the time of
+ * every batch in it, so this is not simply amount over rate.
+ */
+function orderHoursFor(amount: number, batchQty: number, batchHours: number): number {
+  if (amount <= 0 || batchQty <= 0) return 0;
+
+  const maxOutputPerOrder = batchQty * MAX_ORDER_SIZE_PER_SLOT;
+  const fullOrders = Math.floor(amount / maxOutputPerOrder);
+  const remainder = amount % maxOutputPerOrder;
+  const finalOrderBatches =
+    remainder > 0 ? Math.max(1, Math.min(MAX_ORDER_SIZE_PER_SLOT, Math.ceil(remainder / batchQty))) : 0;
+
+  return fullOrders * batchHours * MAX_ORDER_SIZE_PER_SLOT + finalOrderBatches * batchHours;
+}
+
 function calculateProduced(inputs: ProductionInputs, warnings: Set<string>): ProducedRow[] {
   const batchByName = new Map(inputs.batchInfos.map((row) => [key(row.name), row]));
   const factoryById = new Map(inputs.factories.map((row) => [row.id, row]));
 
-  // Lines without an explicit slot allocation share whatever slots are left.
   const allocatedByFactory = new Map<string, number>();
-  const unallocatedByFactory = new Map<string, number>();
+  /**
+   * Lines sharing a building split it by how long their orders run, not evenly.
+   *
+   * Queueing one order of each in turn is the usual way to share a building,
+   * and a longer order holds the slot longer: a 128h rations order against a
+   * 51h water order is not half the building each, it is 71% and 29%. Splitting
+   * evenly overstates whatever the shorter order makes, and so overstates what
+   * that product consumes — which shows up as a shortage that never appears in
+   * game. Set slots explicitly on a line to opt out of sharing.
+   */
+  const sharedOrderHoursByFactory = new Map<string, number>();
 
   for (const row of inputs.produced) {
     if (!row.factoryId || !row.name.trim() || row.amount <= 0) continue;
+
     if (row.allocatedSlots !== null) {
       allocatedByFactory.set(row.factoryId, (allocatedByFactory.get(row.factoryId) ?? 0) + row.allocatedSlots);
-    } else {
-      unallocatedByFactory.set(row.factoryId, (unallocatedByFactory.get(row.factoryId) ?? 0) + 1);
+      continue;
     }
+
+    const batch = batchByName.get(key(row.name));
+    const factory = factoryById.get(row.factoryId);
+    const hours = orderHoursFor(
+      row.amount,
+      batch?.batchQty ?? 0,
+      safeDiv(batch?.knownBatchHours ?? 0, factory?.efficiency ?? 0),
+    );
+    sharedOrderHoursByFactory.set(row.factoryId, (sharedOrderHoursByFactory.get(row.factoryId) ?? 0) + hours);
   }
 
   for (const [factoryId, allocated] of allocatedByFactory) {
@@ -151,19 +189,22 @@ function calculateProduced(inputs: ProductionInputs, warnings: Set<string>): Pro
     const efficiency = factory?.efficiency ?? 0;
     const availableSlots = factory ? slotsOf(factory) : 0;
     const explicitlyAllocated = row.factoryId ? allocatedByFactory.get(row.factoryId) ?? 0 : 0;
-    const sharing = row.factoryId ? unallocatedByFactory.get(row.factoryId) ?? 0 : 0;
     const sharedSlots = Math.max(0, availableSlots - explicitlyAllocated);
+    const currentBatchHours = safeDiv(batchHours100, efficiency);
+
+    const ownOrderHours = orderHoursFor(row.amount, batchQty, currentBatchHours);
+    const sharedOrderHours = row.factoryId ? sharedOrderHoursByFactory.get(row.factoryId) ?? 0 : 0;
 
     const effectiveSlots =
       row.amount <= 0
         ? 0
         : row.allocatedSlots !== null
           ? row.allocatedSlots
-          : sharing > 0
-            ? safeDiv(sharedSlots, sharing)
+          : sharedOrderHours > 0
+            ? sharedSlots * safeDiv(ownOrderHours, sharedOrderHours)
             : 0;
 
-    const currentBatchHours = safeDiv(batchHours100, efficiency);
+    const capacityShare = availableSlots > 0 ? safeDiv(effectiveSlots, availableSlots) : null;
     const maxOutputPerOrder = batchQty * MAX_ORDER_SIZE_PER_SLOT;
     const maxOrderHours = currentBatchHours * MAX_ORDER_SIZE_PER_SLOT;
 
@@ -191,6 +232,7 @@ function calculateProduced(inputs: ProductionInputs, warnings: Set<string>): Pro
       batchHours100,
       currentBatchHours,
       effectiveSlots,
+      capacityShare,
       totalHours,
       outputPerHour,
       outputPerWeek: outputPerHour * HOURS_PER_WEEK,

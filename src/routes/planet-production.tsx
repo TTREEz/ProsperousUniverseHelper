@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
 import { extractionBuildingFor, extractionPerDay } from "@/lib/extraction";
-import { formatNumber } from "@/lib/formats";
+import { formatNumber, formatPercent } from "@/lib/formats";
 import { applyRecipeToPlanet, type RecipeChoice } from "@/planner/apply-recipe";
 import { calculateProduction, type ProductionPlan } from "@/planner/production";
 import {
@@ -498,6 +498,16 @@ function ProductionSection({
                     </td>
                     <td className="py-1.5 text-right text-slate-400">
                       {formatNumber(derived?.effectiveSlots ?? 0, 2)}
+                      {/* Lines sharing a building split it by order length, so
+                          show the share rather than leaving it to be inferred. */}
+                      {derived?.capacityShare !== null && derived?.capacityShare !== undefined && (
+                        <span
+                          className="ml-1.5 text-xs text-slate-600"
+                          title="Share of this building, from how long its orders run against the others"
+                        >
+                          {formatPercent(derived.capacityShare)}
+                        </span>
+                      )}
                     </td>
                     <td className="py-1.5 text-right text-slate-100">{formatNumber(derived?.outputPerHour ?? 0, 2)}</td>
                     <td className="py-1.5 text-right text-slate-400">{formatNumber(derived?.outputPerWeek ?? 0, 0)}</td>
