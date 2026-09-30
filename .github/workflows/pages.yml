@@ -27,11 +27,11 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      # Turns Pages on if it has not been enabled by hand, so the deploy below
-      # has somewhere to publish to.
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # Pages has to be switched on for the repository first, under
+      # Settings -> Pages -> Source -> GitHub Actions. configure-pages with
+      # enablement was tried here and cannot do it: the workflow token is not
+      # allowed to create the Pages site, so it only moved the failure earlier
+      # and stopped the artifact being uploaded at all.
 
       # The app uses hash routing and a relative base path, so the build needs
       # no per-repository path configuration to work from a Pages subpath.
