@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, net, protocol } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -129,9 +130,50 @@ ipcMain.handle("pu:saveAs", async (_event, { suggestedName, text }) => {
   return { filePath: result.filePath, name: path.basename(result.filePath) };
 });
 
+/**
+ * Self-update, for the installed build only.
+ *
+ * A portable exe has nowhere to install an update to, and electron-updater
+ * throws rather than no-ops there, so it is only started when the app is
+ * actually installed. The user's data is a file they hold outside the app, and
+ * older save files are migrated on load, so replacing the binary cannot cost
+ * them anything.
+ *
+ * Nothing is installed behind the user's back: the download happens quietly,
+ * and it is applied on quit — which runs the unsaved-changes prompt first.
+ */
+function startUpdater(window) {
+  if (devServer || process.env.PORTABLE_EXECUTABLE_DIR) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  const send = (channel, payload) => {
+    if (!window.isDestroyed()) window.webContents.send(channel, payload);
+  };
+
+  autoUpdater.on("update-available", (info) => send("pu:update-available", { version: info?.version ?? null }));
+  autoUpdater.on("update-downloaded", (info) => send("pu:update-ready", { version: info?.version ?? null }));
+  autoUpdater.on("error", (error) => send("pu:update-error", { message: String(error?.message ?? error) }));
+
+  // Checking immediately competes with first paint, and there is no hurry.
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((error) => {
+      send("pu:update-error", { message: String(error?.message ?? error) });
+    });
+  }, 4000);
+}
+
+ipcMain.handle("pu:install-update", () => {
+  // Skips the close handler, so the renderer only calls this once the user has
+  // dealt with unsaved work.
+  autoUpdater.quitAndInstall();
+});
+
 app.whenReady().then(() => {
   protocol.handle("app", serveFromDist);
   createWindow();
+  startUpdater(BrowserWindow.getAllWindows()[0]);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

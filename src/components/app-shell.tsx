@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Boxes, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket, ShoppingCart, Truck } from "lucide-react";
+import { Boxes, Download, FilePlus2, FolderOpen, Gauge, Layers, Save, Rocket, ShoppingCart, Truck } from "lucide-react";
 import { Badge, Button, cn } from "@/components/ui";
 import { activeScenario, useAppStore } from "@/store/app-store";
 import { storageDescription } from "@/storage";
@@ -57,6 +57,20 @@ export function AppShell() {
     return () => clearTimeout(timer);
   }, [status, setStatus]);
 
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    return window.puDesktop?.onUpdateReady((info) => setUpdateVersion(info.version ?? "a new version"));
+  }, []);
+
+  async function applyUpdate() {
+    // Installing quits the app without the close prompt, so anything unsaved is
+    // dealt with here first rather than lost to an update the user did not ask
+    // to happen right now.
+    if (dirty && !(await save())) return;
+    await window.puDesktop?.installUpdate();
+  }
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-4 border-b border-edge bg-surface-raised px-4 py-2">
@@ -103,6 +117,21 @@ export function AppShell() {
           </Button>
         </div>
       </header>
+
+      {updateVersion && (
+        <div className="flex items-center gap-3 border-b border-accent/40 bg-accent/10 px-4 py-2 text-xs text-slate-200">
+          <Download className="h-3.5 w-3.5 text-accent" />
+          <span>
+            Version {updateVersion} is downloaded and will be applied next time you close the app.
+          </span>
+          <Button size="sm" variant="primary" className="ml-auto" onClick={() => void applyUpdate()}>
+            Restart now
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setUpdateVersion(null)}>
+            Later
+          </Button>
+        </div>
+      )}
 
       {status && (
         <div

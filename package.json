@@ -1,6 +1,6 @@
 {
   "name": "pu-toolset",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Prosperous Universe base optimizer and production planner. Local-first, single-file storage, runs as a desktop app or a static site.",
   "author": "TTREEz",
@@ -14,10 +14,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "desktop:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env PU_DEV_SERVER=http://localhost:5173 electron .\"",
-    "desktop:build": "npm run build && electron-builder --win --publish never"
+    "desktop:build": "npm run build && electron-builder --win --publish never",
+    "desktop:publish": "npm run build && electron-builder --win --publish always"
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
     "immer": "^11.1.18",
     "lucide-react": "^0.462.0",
     "react": "^18.3.1",
@@ -44,6 +46,10 @@
     "vitest": "^2.1.8",
     "wait-on": "^8.0.1"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TTREEz/ProsperousUniverseHelper.git"
+  },
   "build": {
     "appId": "com.treez.putoolset",
     "productName": "PU Toolset",
@@ -54,11 +60,23 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "TTREEz",
+        "repo": "ProsperousUniverseHelper"
+      }
+    ],
     "win": {
       "target": [
         "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
     }
   }
 }

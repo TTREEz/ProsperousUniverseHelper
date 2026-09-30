@@ -150,6 +150,24 @@ Those rows are listed as unpriced and named under the total, so a cheap-looking
 estimate is never hiding the materials it could not cost. A row needing more
 units than the exchange has listed is flagged too.
 
+## Updates
+
+The installed build updates itself from GitHub releases. It checks a few
+seconds after launch, downloads quietly, and applies the update when the app
+next closes — which runs the unsaved-changes prompt first. "Restart now" saves
+before quitting, because installing bypasses that prompt.
+
+The **portable exe cannot self-update**: there is nothing installed to replace.
+Use the installer if you want updates, and the portable build if you would
+rather carry it on a stick.
+
+Releases are published by electron-builder itself rather than by uploading the
+exes, because the updater also needs `latest.yml` beside them and that is easy
+to leave out when listing files by hand.
+
+An update only replaces the program. Your data is a file you keep, and older
+save files are migrated when opened, so a new version cannot cost you work.
+
 ## Desktop specifics
 
 The window will not close silently on unsaved work: the main process intercepts

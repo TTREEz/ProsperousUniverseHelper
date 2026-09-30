@@ -17,4 +17,13 @@ contextBridge.exposeInMainWorld("puDesktop", {
   },
 
   reportSaveFinished: (saved) => ipcRenderer.send("pu:save-finished", saved),
+
+  /** Fires when a new version has been downloaded and is waiting to be applied. */
+  onUpdateReady: (handler) => {
+    const listener = (_event, info) => handler(info);
+    ipcRenderer.on("pu:update-ready", listener);
+    return () => ipcRenderer.removeListener("pu:update-ready", listener);
+  },
+
+  installUpdate: () => ipcRenderer.invoke("pu:install-update"),
 });

@@ -11,6 +11,8 @@ type DesktopBridge = {
   setDirty(dirty: boolean): void;
   onRequestSave(handler: () => void): () => void;
   reportSaveFinished(saved: boolean): void;
+  onUpdateReady(handler: (info: { version: string | null }) => void): () => void;
+  installUpdate(): Promise<void>;
 };
 
 declare global {
