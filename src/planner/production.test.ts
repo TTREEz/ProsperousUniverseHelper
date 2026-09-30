@@ -155,7 +155,7 @@ describe("calculateProduction", () => {
     const plan = calculateProduction({
       ...ratSetup(),
       recipeInfos: [{ id: "r1", product: "RAT", ingredient: "GRN", qtyPerProductBatch: 2 }],
-      workforceConsumption: [{ id: "w1", resource: "RAT", dailyConsumption: 48, notes: null }],
+      workforceConsumption: [{ resource: "RAT", dailyConsumption: 48 }],
     });
 
     const rat = plan.balance.find((row) => row.resource === "RAT")!;
@@ -170,11 +170,11 @@ describe("calculateProduction", () => {
 
   it("counts an incoming trade route as supply, so it is not also bought", () => {
     const withoutRoute = calculateProduction(
-      inputs({ workforceConsumption: [{ id: "w1", resource: "DW", dailyConsumption: 24, notes: null }] }),
+      inputs({ workforceConsumption: [{ resource: "DW", dailyConsumption: 24 }] }),
     );
     const withRoute = calculateProduction(
       inputs({
-        workforceConsumption: [{ id: "w1", resource: "DW", dailyConsumption: 24, notes: null }],
+        workforceConsumption: [{ resource: "DW", dailyConsumption: 24 }],
         incomingTradeRoutes: [route("t1", "DW", 168)],
       }),
     );
@@ -199,7 +199,7 @@ describe("calculateProduction", () => {
   it("ignores a disabled trade route", () => {
     const plan = calculateProduction(
       inputs({
-        workforceConsumption: [{ id: "w1", resource: "DW", dailyConsumption: 24, notes: null }],
+        workforceConsumption: [{ resource: "DW", dailyConsumption: 24 }],
         incomingTradeRoutes: [route("t1", "DW", 168, false)],
       }),
     );
@@ -210,7 +210,7 @@ describe("calculateProduction", () => {
   it("keeps the local balance separate from the trade-route adjusted one", () => {
     const plan = calculateProduction(
       inputs({
-        workforceConsumption: [{ id: "w1", resource: "DW", dailyConsumption: 24, notes: null }],
+        workforceConsumption: [{ resource: "DW", dailyConsumption: 24 }],
         incomingTradeRoutes: [route("t1", "DW", 168)],
       }),
     );
@@ -223,7 +223,7 @@ describe("calculateProduction", () => {
   it("adds a manual extra on top of the derived import", () => {
     const plan = calculateProduction(
       inputs({
-        workforceConsumption: [{ id: "w1", resource: "DW", dailyConsumption: 24, notes: null }],
+        workforceConsumption: [{ resource: "DW", dailyConsumption: 24 }],
         needToBuy: [
           {
             id: "n1",

@@ -145,6 +145,17 @@ alone.
 The order size is entered in units, with the batch count shown beside it,
 flagged once it passes the 20 batches one order holds.
 
+**Workforce is not entered either.** Only production buildings employ people —
+habitation, storage and the core module report no workers — so a planet's
+population is the sum of what its buildings need, and what that population gets
+through is the game's per-100-workers daily rate scaled to the headcount. Two
+farms means 100 pioneers, which means 4 DW, 4 RAT and 0.5 OVE a day, and that
+lands in the resource balance and the buy list without anyone typing it.
+
+Luxuries are left out unless the planet asks for them. They lift efficiency but
+nothing stops without them, so counting them by default would overstate what
+has to be bought.
+
 Systems can be looked up by name or natural id to add their planets in one go.
 FIO has no endpoint listing a system's planets, and the one response carrying
 system ids is 35MB, so this uses the fact that a planet's natural id is its

@@ -46,7 +46,6 @@ export function cloneScenario(source: Scenario, name = `${source.name} (copy)`):
     }
     for (const row of planet.batchInfos) row.id = newId();
     for (const row of planet.recipeInfos) row.id = newId();
-    for (const row of planet.workforceConsumption) row.id = newId();
     for (const row of planet.needToBuy) row.id = newId();
     for (const row of planet.sellPlans) row.id = newId();
     for (const plan of planet.capacityPlans) plan.id = newId();

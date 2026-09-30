@@ -88,11 +88,15 @@ export type Planet = {
   fioPlanetNaturalId: string | null;
   defaultBuyExchangeCode: string | null;
   defaultSellExchangeCode: string | null;
+  /**
+   * Whether to plan for luxury goods. They lift worker efficiency but nothing
+   * stops without them, so they are left out unless asked for.
+   */
+  includeLuxuries: boolean;
   batchInfos: BatchInfo[];
   factories: Factory[];
   produced: Produced[];
   recipeInfos: RecipeInfo[];
-  workforceConsumption: WorkforceConsumption[];
   needToBuy: NeedToBuy[];
   sellPlans: SellPlan[];
   capacityPlans: CapacityPlan[];
@@ -152,13 +156,6 @@ export type RecipeInfo = {
   product: string;
   ingredient: string;
   qtyPerProductBatch: number;
-};
-
-export type WorkforceConsumption = {
-  id: string;
-  resource: string;
-  dailyConsumption: number;
-  notes: string | null;
 };
 
 export type NeedToBuy = {

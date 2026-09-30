@@ -5,8 +5,16 @@ import { extractionBuildingFor, extractionPerDay } from "@/lib/extraction";
 import { formatNumber } from "@/lib/formats";
 import { applyRecipeToPlanet, type RecipeChoice } from "@/planner/apply-recipe";
 import { calculateProduction, type ProductionPlan } from "@/planner/production";
+import {
+  POPULATION_CLASSES,
+  consumptionFromPopulation,
+  emptyPopulation,
+  populationFromBuildings,
+  totalPopulation,
+  type WorkforceLine,
+} from "@/planner/workforce";
 import { prosperousProvider } from "@/provider/fio-provider";
-import type { PlanetResource } from "@/provider/types";
+import type { PlanetResource, PopulationCounts, WorkforceNeed } from "@/provider/types";
 import { newId } from "@/schema/defaults";
 import type { Planet, Scenario } from "@/schema/types";
 import { useAppStore } from "@/store/app-store";
@@ -159,6 +167,48 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
   const { update } = useAppStore();
   const [section, setSection] = useState<Section>("production");
 
+  // Who works here, and what they get through, both follow from the buildings.
+  const [workforceByBuilding, setWorkforceByBuilding] = useState<Map<string, PopulationCounts>>(new Map());
+  const [needs, setNeeds] = useState<WorkforceNeed[]>([]);
+
+  const buildingCodes = useMemo(
+    () => [...new Set(planet.factories.map((factory) => factory.buildingCode.trim().toUpperCase()))].sort().join(","),
+    [planet.factories],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const codes = buildingCodes ? buildingCodes.split(",") : [];
+
+    Promise.all([
+      Promise.all(
+        codes.map(async (code) => {
+          const workforce = await prosperousProvider.getBuildingWorkforceRequirements(code).catch(() => null);
+          return [code, workforce ?? emptyPopulation()] as const;
+        }),
+      ),
+      prosperousProvider.getWorkforceNeeds().catch(() => ({ needs: [], source: "fallback" as const })),
+    ]).then(([workforceEntries, needsResult]) => {
+      if (cancelled) return;
+      setWorkforceByBuilding(new Map(workforceEntries));
+      setNeeds(needsResult.needs);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildingCodes]);
+
+  const population = useMemo(
+    () => populationFromBuildings(planet.factories, workforceByBuilding),
+    [planet.factories, workforceByBuilding],
+  );
+
+  const consumption = useMemo(
+    () => consumptionFromPopulation(population, needs, planet.includeLuxuries),
+    [population, needs, planet.includeLuxuries],
+  );
+
   const plan: ProductionPlan = useMemo(() => {
     const incoming = scenario.tradeRoutes.filter((route) => route.toPlanetId === planet.id);
     const outgoing = scenario.tradeRoutes.filter((route) => route.fromPlanetId === planet.id);
@@ -168,12 +218,15 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
       factories: planet.factories,
       produced: planet.produced,
       recipeInfos: planet.recipeInfos,
-      workforceConsumption: planet.workforceConsumption,
+      workforceConsumption: consumption.map((line) => ({
+        resource: line.materialTicker,
+        dailyConsumption: line.dailyConsumption,
+      })),
       needToBuy: planet.needToBuy,
       incomingTradeRoutes: incoming,
       outgoingTradeRoutes: outgoing,
     });
-  }, [planet, scenario.tradeRoutes]);
+  }, [planet, scenario.tradeRoutes, consumption]);
 
   function edit(recipe: (target: Planet) => void) {
     update((draft) => {
@@ -217,7 +270,15 @@ export function PlanetProduction({ planet, scenario }: { planet: Planet; scenari
         </ul>
       )}
 
-      {section === "production" && <ProductionSection planet={planet} plan={plan} edit={edit} />}
+      {section === "production" && (
+        <ProductionSection
+          planet={planet}
+          plan={plan}
+          population={population}
+          consumption={consumption}
+          edit={edit}
+        />
+      )}
       {section === "resources" && (
         <ResourcesSection planetCode={planet.fioPlanetNaturalId ?? planet.name ?? null} />
       )}
@@ -261,10 +322,14 @@ function Txt({ value, onChange, placeholder }: { value: string; onChange: (next:
 function ProductionSection({
   planet,
   plan,
+  population,
+  consumption,
   edit,
 }: {
   planet: Planet;
   plan: ProductionPlan;
+  population: PopulationCounts;
+  consumption: WorkforceLine[];
   edit: (recipe: (target: Planet) => void) => void;
 }) {
   const [product, setProduct] = useState("");
@@ -532,7 +597,7 @@ function ProductionSection({
       </div>
 
       <IngredientsSection planet={planet} plan={plan} edit={edit} />
-      <WorkforceSection planet={planet} edit={edit} />
+      <WorkforceSection planet={planet} population={population} consumption={consumption} edit={edit} />
     </div>
   );
 }
@@ -631,64 +696,69 @@ function IngredientsSection({
   );
 }
 
-function WorkforceSection({ planet, edit }: { planet: Planet; edit: (recipe: (target: Planet) => void) => void }) {
+function WorkforceSection({
+  planet,
+  population,
+  consumption,
+  edit,
+}: {
+  planet: Planet;
+  population: PopulationCounts;
+  consumption: WorkforceLine[];
+  edit: (recipe: (target: Planet) => void) => void;
+}) {
+  const headcount = totalPopulation(population);
+
   return (
     <div>
-      <SubHeading title="Workforce consumption" hint="What your population eats and drinks each day." />
-      <div className="mb-2">
-        <Button
-          size="sm"
-          onClick={() =>
-            edit((target) => {
-              target.workforceConsumption.push({ id: newId(), resource: "", dailyConsumption: 0, notes: null });
-            })
-          }
-        >
-          <Plus className="h-3.5 w-3.5" /> Add
-        </Button>
-      </div>
+      <SubHeading
+        title="Workforce"
+        hint="Worked out from the buildings here. Production buildings employ people; habitation, storage and the core module do not."
+      />
 
-      {planet.workforceConsumption.length === 0 ? (
-        <p className="text-xs text-slate-600">Nothing recorded.</p>
+      {headcount === 0 ? (
+        <p className="text-xs text-slate-600">
+          No production buildings here yet, so nobody lives here and nothing is consumed.
+        </p>
       ) : (
-        <ul className="space-y-1">
-          {planet.workforceConsumption.map((row) => (
-            <li key={row.id} className="flex items-center gap-2 text-sm">
-              <Txt
-                value={row.resource}
-                placeholder="DW"
-                onChange={(next) =>
+        <>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {POPULATION_CLASSES.filter((key) => population[key] > 0).map((key) => (
+              <Badge key={key} tone="accent">
+                {formatNumber(population[key], 0)} {key}
+              </Badge>
+            ))}
+            <label className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                checked={planet.includeLuxuries}
+                onChange={(event) =>
                   edit((target) => {
-                    const found = target.workforceConsumption.find((entry) => entry.id === row.id);
-                    if (found) found.resource = next.toUpperCase();
+                    target.includeLuxuries = event.target.checked;
                   })
                 }
               />
-              <Num
-                value={row.dailyConsumption}
-                onChange={(next) =>
-                  edit((target) => {
-                    const found = target.workforceConsumption.find((entry) => entry.id === row.id);
-                    if (found) found.dailyConsumption = next;
-                  })
-                }
-              />
-              <span className="text-xs text-slate-500">per day</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto"
-                onClick={() =>
-                  edit((target) => {
-                    target.workforceConsumption = target.workforceConsumption.filter((entry) => entry.id !== row.id);
-                  })
-                }
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </li>
-          ))}
-        </ul>
+              Supply luxuries
+            </label>
+          </div>
+
+          {consumption.length === 0 ? (
+            <p className="text-xs text-slate-600">No consumption data available from the provider.</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {consumption.map((line) => (
+                <li key={line.materialTicker} className="flex items-center gap-2 text-sm">
+                  <span className="w-16 font-medium text-slate-100">{line.materialTicker}</span>
+                  <span className="text-xs text-slate-500">{line.materialName}</span>
+                  {line.isLuxury && <Badge>luxury</Badge>}
+                  <span className="ml-auto text-slate-300">
+                    {formatNumber(line.dailyConsumption, 2)} / day
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   );

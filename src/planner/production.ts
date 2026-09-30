@@ -5,7 +5,6 @@ import type {
   Produced,
   RecipeInfo,
   TradeRoute,
-  WorkforceConsumption,
 } from "@/schema/types";
 
 /**
@@ -35,7 +34,8 @@ export type ProductionInputs = {
   factories: Factory[];
   produced: Produced[];
   recipeInfos: RecipeInfo[];
-  workforceConsumption: WorkforceConsumption[];
+  /** Derived from the planet's buildings, not stored. */
+  workforceConsumption: Array<{ resource: string; dailyConsumption: number }>;
   needToBuy: NeedToBuy[];
   incomingTradeRoutes: TradeRoute[];
   outgoingTradeRoutes: TradeRoute[];

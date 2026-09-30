@@ -44,13 +44,6 @@ const recipeInfo = z.object({
   qtyPerProductBatch: z.number(),
 });
 
-const workforceConsumption = z.object({
-  id: z.string(),
-  resource: z.string(),
-  dailyConsumption: z.number(),
-  notes: nullableString,
-});
-
 const needToBuy = z.object({
   id: z.string(),
   resource: z.string(),
@@ -85,11 +78,11 @@ const planet = z.object({
   fioPlanetNaturalId: z.string().nullable().default(null),
   defaultBuyExchangeCode: z.string().nullable().default(null),
   defaultSellExchangeCode: z.string().nullable().default(null),
+  includeLuxuries: z.boolean().default(false),
   batchInfos: z.array(batchInfo).default([]),
   factories: z.array(factory).default([]),
   produced: z.array(produced).default([]),
   recipeInfos: z.array(recipeInfo).default([]),
-  workforceConsumption: z.array(workforceConsumption).default([]),
   needToBuy: z.array(needToBuy).default([]),
   sellPlans: z.array(sellPlan).default([]),
   capacityPlans: z.array(capacityPlan).default([]),
