@@ -93,6 +93,20 @@ dropped, so a plan often ends up with fewer stages than area budgets tried —
 that is the filter working, not a gap. It costs several full solves, so it is
 behind a button rather than part of every run.
 
+### More than one target
+
+A plan has one main product, which is what gets maximised or aimed at an
+amount, and any number of extra products in **fixed amounts**. Extras are
+seeded into the same demand map the chain is expanded from, so two products
+that share an ingredient get one supplier between them rather than a separate
+chain each.
+
+Extras are fixed rather than maximised on purpose. Maximising two products at
+once has no single answer without saying what one is worth against the other,
+and inventing that would quietly optimise for something you did not ask for.
+Fixed amounts take priority over the main target, so asking for more than the
+area allows shrinks the main product and then warns that the area is exceeded.
+
 ### Choosing recipes
 
 The solver scores each way of making a product by the whole chain beneath it —

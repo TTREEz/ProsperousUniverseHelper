@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Layers, Play, Save, ShoppingCart } from "lucide-react";
+import { Layers, Play, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber, formatPercent } from "@/lib/formats";
 import { optimizeBase } from "@/optimizer/optimize";
 import { generateBasePhases } from "@/optimizer/phases";
-import type { BasePhasePlan, OptimizedBaseResult, RecipeDecision } from "@/optimizer/types";
+import type { AdditionalTarget, BasePhasePlan, OptimizedBaseResult, RecipeDecision } from "@/optimizer/types";
 import { prosperousProvider } from "@/provider/fio-provider";
 import { newId } from "@/schema/defaults";
 import type { ObjectiveType, TargetPeriod } from "@/schema/types";
@@ -30,6 +30,7 @@ export function OptimizerRoute() {
   const [targetAmount, setTargetAmount] = useState<number | "">("");
   const [targetPeriod, setTargetPeriod] = useState<TargetPeriod>("WEEK");
   const [inHouse, setInHouse] = useState<string[]>(["DW", "RAT"]);
+  const [additionalTargets, setAdditionalTargets] = useState<AdditionalTarget[]>([]);
 
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export function OptimizerRoute() {
       targetProduct: targetProduct.trim().toUpperCase(),
       targetAmount: targetAmount === "" ? null : targetAmount,
       targetPeriod: objectiveType === "CLOSEST_TO_TARGET" ? targetPeriod : null,
+      additionalTargets: additionalTargets.filter((entry) => entry.product.trim() && entry.amount > 0),
       selectedWorkforceInHouseResources: inHouse,
       selectedRecipeOverrides: overrides,
       excludedRecipes: [],
@@ -101,6 +103,7 @@ export function OptimizerRoute() {
         targetProduct: result.summary.targetProduct,
         targetAmount: targetAmount === "" ? null : targetAmount,
         targetPeriod: objectiveType === "CLOSEST_TO_TARGET" ? targetPeriod : null,
+        additionalTargets,
         selectedWorkforceInHouseResources: inHouse,
         selectedRecipeOverrides: recipeOverrides,
         excludedRecipes: [],
@@ -237,6 +240,70 @@ export function OptimizerRoute() {
               </Field>
             </>
           )}
+
+          <div className="sm:col-span-2 lg:col-span-4">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="label mb-0">Also make</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setAdditionalTargets((current) => [...current, { product: "", amount: 0, period: "WEEK" }])}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add product
+              </Button>
+              <span className="text-xs text-slate-600">
+                Fixed amounts made alongside the main target, sharing its production chain.
+              </span>
+            </div>
+
+            {additionalTargets.map((entry, index) => (
+              <div key={index} className="mb-1.5 flex items-center gap-2">
+                <Input
+                  className="w-28"
+                  value={entry.product}
+                  placeholder="DW"
+                  onChange={(event) =>
+                    setAdditionalTargets((current) =>
+                      current.map((row, i) => (i === index ? { ...row, product: event.target.value.toUpperCase() } : row)),
+                    )
+                  }
+                />
+                <Input
+                  className="w-28"
+                  type="number"
+                  min={0}
+                  value={entry.amount}
+                  onChange={(event) =>
+                    setAdditionalTargets((current) =>
+                      current.map((row, i) => (i === index ? { ...row, amount: Number(event.target.value) || 0 } : row)),
+                    )
+                  }
+                />
+                <Select
+                  className="w-28"
+                  value={entry.period}
+                  onChange={(event) =>
+                    setAdditionalTargets((current) =>
+                      current.map((row, i) =>
+                        i === index ? { ...row, period: event.target.value as TargetPeriod } : row,
+                      ),
+                    )
+                  }
+                >
+                  <option value="HOUR">per hour</option>
+                  <option value="DAY">per day</option>
+                  <option value="WEEK">per week</option>
+                </Select>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setAdditionalTargets((current) => current.filter((_, i) => i !== index))}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
 
           <div className="sm:col-span-2 lg:col-span-4">
             <span className="label">Produce workforce goods in-house</span>

@@ -167,6 +167,15 @@ const baseTemplate = z.object({
   targetProduct: z.string().default(""),
   targetAmount: z.number().nullable().default(null),
   targetPeriod: z.enum(["HOUR", "DAY", "WEEK"]).nullable().default(null),
+  additionalTargets: z
+    .array(
+      z.object({
+        product: z.string(),
+        amount: z.number(),
+        period: z.enum(["HOUR", "DAY", "WEEK"]).default("WEEK"),
+      }),
+    )
+    .default([]),
   selectedWorkforceInHouseResources: z.array(z.string()).default([]),
   selectedRecipeOverrides: z.record(z.string()).default({}),
   excludedRecipes: z.array(z.string()).default([]),

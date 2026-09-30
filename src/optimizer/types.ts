@@ -3,6 +3,20 @@ import type { PlanetInfo, PopulationCounts, RecipeCandidate } from "@/provider/t
 export type ObjectiveType = "MAXIMIZE_OUTPUT" | "CLOSEST_TO_TARGET" | "MINIMIZE_IMPORTS" | "MAXIMIZE_SELF_SUFFICIENCY";
 export type TargetPeriod = "HOUR" | "DAY" | "WEEK";
 
+/**
+ * A product the base must also make, on top of the main target.
+ *
+ * These are fixed amounts rather than things to maximise: with two products
+ * being maximised at once there is no single best answer without saying how
+ * much one is worth against the other. Stating the amount avoids that, and the
+ * base is still sized around the main target.
+ */
+export type AdditionalTarget = {
+  product: string;
+  amount: number;
+  period: TargetPeriod;
+};
+
 export type OptimizerInput = {
   planetCode: string;
   availableArea: number;
@@ -10,6 +24,8 @@ export type OptimizerInput = {
   targetProduct: string;
   targetAmount?: number | null;
   targetPeriod?: TargetPeriod | null;
+  /** Extra products to make alongside the main target, in fixed amounts. */
+  additionalTargets?: AdditionalTarget[];
   selectedWorkforceInHouseResources: string[];
   selectedRecipeOverrides: Record<string, string>;
   lockedBuildings?: unknown[];

@@ -25,6 +25,7 @@ function fileWithContent(): PuDataFile {
     targetProduct: "RAT",
     targetAmount: null,
     targetPeriod: null,
+    additionalTargets: [],
     selectedWorkforceInHouseResources: ["DW", "RAT"],
     selectedRecipeOverrides: { RAT: "FP:1" },
     excludedRecipes: [],

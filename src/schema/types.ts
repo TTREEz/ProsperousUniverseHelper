@@ -273,6 +273,8 @@ export type BaseTemplate = {
   targetProduct: string;
   targetAmount: number | null;
   targetPeriod: TargetPeriod | null;
+  /** Extra products the base must also make, in fixed amounts. */
+  additionalTargets: Array<{ product: string; amount: number; period: TargetPeriod }>;
   selectedWorkforceInHouseResources: string[];
   selectedRecipeOverrides: Record<string, string>;
   excludedRecipes: string[];

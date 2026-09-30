@@ -37,6 +37,7 @@ function populatedScenario(): Scenario {
     targetProduct: "RAT",
     targetAmount: null,
     targetPeriod: null,
+    additionalTargets: [],
     selectedWorkforceInHouseResources: [],
     selectedRecipeOverrides: {},
     excludedRecipes: [],

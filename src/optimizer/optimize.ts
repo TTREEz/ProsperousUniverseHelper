@@ -817,9 +817,21 @@ async function solveForRate(
     const forceProduce = new Set<string>([normalizeTicker(input.targetProduct), ...selectedInHouse, ...supportTargets.keys()]);
     const sourceByProduct = new Map<string, DemandSource>([[normalizeTicker(input.targetProduct), "target"]]);
     const demands = new Map<string, number>([[normalizeTicker(input.targetProduct), ratePerHour]]);
+
+    // Extra targets are fixed demands, so they ride in the same map the chain
+    // is expanded from and share intermediates with the main target rather than
+    // being planned as a separate base.
+    for (const extra of additionalTargetRates(input)) {
+      addDemand(demands, extra.product, extra.amountPerHour);
+      sourceByProduct.set(extra.product, "target");
+      forceProduce.add(extra.product);
+    }
+
     for (const [resource, amount] of supportTargets.entries()) {
       addDemand(demands, resource, amount);
-      sourceByProduct.set(resource, "workforce-support");
+      // A product asked for outright stays a target even if the workforce also
+      // wants it, so it is not relabelled as support here.
+      if (!sourceByProduct.has(resource)) sourceByProduct.set(resource, "workforce-support");
     }
 
     const ctx: SolveContext = {
@@ -877,6 +889,16 @@ async function solveForRate(
   };
 }
 
+/** Extra targets as per-hour demands, dropping blank or non-positive rows. */
+function additionalTargetRates(input: OptimizerInput): Array<{ product: string; amountPerHour: number }> {
+  return (input.additionalTargets ?? [])
+    .map((entry) => ({
+      product: normalizeTicker(entry.product),
+      amountPerHour: entry.amount / periodToHours(entry.period),
+    }))
+    .filter((entry) => entry.product.length > 0 && entry.amountPerHour > 0);
+}
+
 function targetAmountPerHour(input: OptimizerInput) {
   if (!input.targetAmount || input.targetAmount <= 0) return null;
   return input.targetAmount / periodToHours(input.targetPeriod);
@@ -893,7 +915,11 @@ function scoreResult(input: OptimizerInput, solve: RawSolve, requestedPerHour: n
 
 function toResult(input: OptimizerInput, planet: PlanetInfo | null, solve: RawSolve, requestedPerHour: number | null): OptimizedBaseResult {
   const score = scoreResult(input, solve, requestedPerHour);
-  const targetRows = solve.productionRows.filter((row) => row.product === normalizeTicker(input.targetProduct));
+  const targetProducts = new Set([
+    normalizeTicker(input.targetProduct),
+    ...additionalTargetRates(input).map((entry) => entry.product),
+  ]);
+  const targetRows = solve.productionRows.filter((row) => targetProducts.has(row.product));
   const warnings = new Set(solve.warnings);
   if (solve.areaUsed > input.availableArea) warnings.add(`Area exceeds available base area by ${round(solve.areaUsed - input.availableArea, 4)}.`);
   if (!planet && input.planetCode.trim()) warnings.add(`Planet '${input.planetCode}' could not be resolved from the provider.`);
