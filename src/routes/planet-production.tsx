@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
+import { Badge, Button, EmptyState, Select } from "@/components/ui";
 import { extractionBuildingFor, extractionPerDay } from "@/lib/extraction";
+import { ComboInput, useCatalog, type ComboOption } from "@/components/combo-input";
 import { formatNumber, formatPercent } from "@/lib/formats";
 import { applyRecipeToPlanet, type RecipeChoice } from "@/planner/apply-recipe";
 import { calculateProduction, type ProductionPlan } from "@/planner/production";
@@ -308,13 +309,24 @@ function Num({ value, onChange, width = "w-24" }: { value: number; onChange: (ne
   );
 }
 
-function Txt({ value, onChange, placeholder }: { value: string; onChange: (next: string) => void; placeholder?: string }) {
+function Txt({
+  value,
+  onChange,
+  placeholder,
+  options = [],
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  placeholder?: string;
+  options?: ComboOption[];
+}) {
   return (
-    <input
+    <ComboInput
       value={value}
+      onChange={onChange}
       placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      className="w-28 rounded border border-edge bg-surface px-2 py-1 text-sm text-slate-100"
+      options={options}
+      className="w-28 px-2 py-1 text-sm"
     />
   );
 }
@@ -334,6 +346,7 @@ function ProductionSection({
 }) {
   const [product, setProduct] = useState("");
   const [looking, setLooking] = useState(false);
+  const materials = useCatalog("materials");
   /** Every way each product on this planet can be made, for the pickers. */
   const [choicesByProduct, setChoicesByProduct] = useState<Record<string, RecipeChoice[]>>({});
 
@@ -417,10 +430,11 @@ function ProductionSection({
       <div>
         <SubHeading title="What this planet makes" hint="Amount is the production order size you run." />
         <div className="mb-3 flex gap-2">
-          <Input
+          <ComboInput
             value={product}
             placeholder="Material ticker, e.g. RAT"
-            onChange={(event) => setProduct(event.target.value)}
+            options={materials}
+            onChange={setProduct}
             onKeyDown={(event) => event.key === "Enter" && void addProduct()}
           />
           <Button variant="primary" onClick={() => void addProduct()} disabled={!product.trim() || looking}>
@@ -621,6 +635,7 @@ function IngredientsSection({
   plan: ProductionPlan;
   edit: (recipe: (target: Planet) => void) => void;
 }) {
+  const materials = useCatalog("materials");
   return (
     <div>
       <SubHeading title="Ingredients" hint="What one batch of each product consumes." />
@@ -651,6 +666,7 @@ function IngredientsSection({
             return (
               <li key={row.id} className="flex items-center gap-2 text-sm">
                 <Txt
+                  options={materials}
                   value={row.product}
                   placeholder="RAT"
                   onChange={(next) =>
@@ -672,6 +688,7 @@ function IngredientsSection({
                   }
                 />
                 <Txt
+                  options={materials}
                   value={row.ingredient}
                   placeholder="GRN"
                   onChange={(next) =>

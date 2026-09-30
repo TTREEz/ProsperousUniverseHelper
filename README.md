@@ -145,6 +145,18 @@ alone.
 The order size is entered in units, with the batch count shown beside it,
 flagged once it passes the 20 batches one order holds.
 
+### Typing tickers
+
+Ticker and building-code fields offer a list to pick from while staying plain
+text boxes, so someone who knows the code can type it and someone who does not
+can browse. A value that is not in the list is still accepted, because the list
+can be incomplete.
+
+Where the app knows which values make sense, those come first: a trade route's
+material lists what the sending planet produces before everything else, and the
+material planner's code field follows whether the entry is a building or a
+material.
+
 ### Sharing a building
 
 Lines sharing a building split it **by how long their orders run**, not evenly.

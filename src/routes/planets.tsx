@@ -1,3 +1,4 @@
+import { ComboInput, useCatalog } from "@/components/combo-input";
 import { useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
@@ -351,6 +352,7 @@ function PlanetDetail({
   const scenario = file?.scenarios.find((entry) => entry.id === scenarioId) ?? null;
 
   const [buildingCode, setBuildingCode] = useState("");
+  const buildings = useCatalog("buildings");
   const [count, setCount] = useState(1);
 
   function editPlanet(recipe: (target: Planet) => void) {
@@ -446,10 +448,11 @@ function PlanetDetail({
 
         <div className="flex flex-wrap items-end gap-3 border-b border-edge p-4">
           <Field label="Building code">
-            <Input
+            <ComboInput
               value={buildingCode}
               placeholder="FRM"
-              onChange={(event) => setBuildingCode(event.target.value)}
+              options={buildings}
+              onChange={setBuildingCode}
               onKeyDown={(event) => event.key === "Enter" && addBuilding()}
             />
           </Field>

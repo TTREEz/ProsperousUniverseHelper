@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Plus, Trash2 } from "lucide-react";
+import { ComboInput, useCatalog } from "@/components/combo-input";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber } from "@/lib/formats";
 import { newId } from "@/schema/defaults";
@@ -19,6 +20,33 @@ export function TradeRoutesRoute() {
     () => new Map((scenario?.planets ?? []).map((planet) => [planet.id, planet])),
     [scenario?.planets],
   );
+
+  const allMaterials = useCatalog("materials");
+
+  /**
+   * A route ships what the sending planet makes, so offer that first. Every
+   * other material stays available below it, since a planet can forward
+   * something it bought rather than produced.
+   */
+  const donorOptions = useMemo(() => {
+    const from = fromPlanetId ? planetsById.get(fromPlanetId) : undefined;
+    if (!from) return allMaterials;
+
+    const produced = [
+      ...new Set(
+        from.produced
+          .map((row) => row.name.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (produced.length === 0) return allMaterials;
+
+    const producedSet = new Set(produced);
+    return [
+      ...produced.map((ticker) => ({ value: ticker, label: `made on ${from.name}` })),
+      ...allMaterials.filter((option) => !producedSet.has(option.value)),
+    ];
+  }, [fromPlanetId, planetsById, allMaterials]);
 
   // Net movement per material, so it is obvious what the routes actually do.
   const netByResource = useMemo(() => {
@@ -113,11 +141,15 @@ export function TradeRoutesRoute() {
               </Select>
             </Field>
 
-            <Field label="Material">
-              <Input
+            <Field
+              label="Material"
+              hint={fromPlanetId ? "What the sending planet makes" : undefined}
+            >
+              <ComboInput
                 value={resource}
                 placeholder="RAT"
-                onChange={(event) => setResource(event.target.value)}
+                options={donorOptions}
+                onChange={setResource}
                 onKeyDown={(event) => event.key === "Enter" && addRoute()}
               />
             </Field>

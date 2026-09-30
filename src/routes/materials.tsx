@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ComboInput, useCatalog } from "@/components/combo-input";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
 import { formatNumber } from "@/lib/formats";
 import { derivePackagePlan, type MaterialPlan } from "@/planner/materials";
@@ -125,6 +126,8 @@ function PackageDetail({
 
   const [itemType, setItemType] = useState<ExpansionItemType>("BUILDING");
   const [itemCode, setItemCode] = useState("");
+  const materials = useCatalog("materials");
+  const buildings = useCatalog("buildings");
   const [quantity, setQuantity] = useState(1);
 
   const [plan, setPlan] = useState<MaterialPlan | null>(null);
@@ -323,10 +326,11 @@ function PackageDetail({
           </Field>
 
           <Field label={itemType === "BUILDING" ? "Building code" : "Material ticker"}>
-            <Input
+            <ComboInput
               value={itemCode}
               placeholder={itemType === "BUILDING" ? "FRM" : "BSE"}
-              onChange={(event) => setItemCode(event.target.value)}
+              options={itemType === "BUILDING" ? buildings : materials}
+              onChange={setItemCode}
               onKeyDown={(event) => event.key === "Enter" && addItem()}
             />
           </Field>

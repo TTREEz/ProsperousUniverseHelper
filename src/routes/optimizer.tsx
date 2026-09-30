@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Layers, Play, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
+import { ComboInput, useCatalog } from "@/components/combo-input";
 import { formatNumber, formatPercent } from "@/lib/formats";
 import { optimizeBase } from "@/optimizer/optimize";
 import { generateBasePhases } from "@/optimizer/phases";
@@ -38,6 +39,7 @@ export function OptimizerRoute() {
   const [sentToList, setSentToList] = useState<string | null>(null);
   /** Product ticker to chosen recipe id, for recipes the solver got wrong. */
   const [recipeOverrides, setRecipeOverrides] = useState<Record<string, string>>({});
+  const materials = useCatalog("materials");
   const [phases, setPhases] = useState<BasePhasePlan | null>(null);
   const [phasing, setPhasing] = useState(false);
 
@@ -204,9 +206,10 @@ export function OptimizerRoute() {
           </Field>
 
           <Field label="Target product" hint="Material ticker, e.g. RAT">
-            <Input
+            <ComboInput
               value={targetProduct}
-              onChange={(event) => setTargetProduct(event.target.value)}
+              onChange={setTargetProduct}
+              options={materials}
               placeholder="RAT"
             />
           </Field>
@@ -258,13 +261,14 @@ export function OptimizerRoute() {
 
             {additionalTargets.map((entry, index) => (
               <div key={index} className="mb-1.5 flex items-center gap-2">
-                <Input
+                <ComboInput
                   className="w-28"
                   value={entry.product}
                   placeholder="DW"
-                  onChange={(event) =>
+                  options={materials}
+                  onChange={(next) =>
                     setAdditionalTargets((current) =>
-                      current.map((row, i) => (i === index ? { ...row, product: event.target.value.toUpperCase() } : row)),
+                      current.map((row, i) => (i === index ? { ...row, product: next.toUpperCase() } : row)),
                     )
                   }
                 />
