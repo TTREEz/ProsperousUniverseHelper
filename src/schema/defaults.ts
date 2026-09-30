@@ -6,7 +6,10 @@ import {
   type Scenario,
 } from "@/schema/types";
 
-export const APP_VERSION = "0.1.0";
+/** Injected from package.json at build time, so there is one version to bump. */
+declare const __APP_VERSION__: string;
+
+export const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
 export function newId(): string {
   return crypto.randomUUID();

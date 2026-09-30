@@ -1,8 +1,13 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 const FIO_ORIGIN = "https://rest.fnar.net";
+
+// The app stamps its version into every save file, so it is read from
+// package.json rather than kept in a second place that can drift from it.
+const { version } = createRequire(import.meta.url)("./package.json") as { version: string };
 
 /**
  * Injects a Content-Security-Policy into the built page only.
@@ -41,6 +46,7 @@ function cspPlugin(): Plugin {
 // (user.github.io/repo/) and from Electron's file:// protocol.
 export default defineConfig({
   base: "./",
+  define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [react(), cspPlugin()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
