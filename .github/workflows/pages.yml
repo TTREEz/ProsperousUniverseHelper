@@ -26,6 +26,13 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+      # Turns Pages on if it has not been enabled by hand, so the deploy below
+      # has somewhere to publish to.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       # The app uses hash routing and a relative base path, so the build needs
       # no per-repository path configuration to work from a Pages subpath.
       - uses: actions/upload-pages-artifact@v3
