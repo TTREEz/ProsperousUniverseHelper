@@ -145,6 +145,22 @@ alone.
 The order size is entered in units, with the batch count shown beside it,
 flagged once it passes the 20 batches one order holds.
 
+### Seeing every base at once
+
+The Overview carries a table of every planet in the scenario against every
+material it makes or consumes, per week and after trade routes.
+
+The planet screens answer what one base needs. This answers the question that
+spans them: whether the bases making something still out-produce the ones
+consuming it. A material reads **covered, N spare** when they do, where N is the
+headroom — how much more demand the supplying base can take — or **buy N** when
+they do not.
+
+That headroom is the number worth watching before adding a base. A food planet
+feeding two others may sit at "covered, 266 spare"; add a third that draws 336
+and the same row turns into "buy 69", which is the shortfall you would otherwise
+only find once production stalled.
+
 ### Typing tickers
 
 Ticker and building-code fields offer a list to pick from while staying plain

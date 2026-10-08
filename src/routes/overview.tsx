@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card, CardHeader, EmptyState, Field, Select } from "@/components/ui";
 import { EXCHANGES } from "@/provider/market";
+import { ScenarioNeeds } from "@/routes/scenario-needs";
 import { storageDescription } from "@/storage";
 import { activeScenario, useAppStore } from "@/store/app-store";
 
@@ -79,6 +80,8 @@ export function Overview() {
           </div>
         </Card>
       </div>
+
+      {scenario && scenario.planets.length > 0 && <ScenarioNeeds scenario={scenario} />}
 
       {planets === 0 && templates === 0 && (
         <Card>
